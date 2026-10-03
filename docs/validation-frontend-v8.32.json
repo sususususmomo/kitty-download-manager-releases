@@ -1,0 +1,37 @@
+{
+  "frontend_version": "8.32",
+  "backend_version": "8.31",
+  "native_protocol": 1,
+  "tested_application_commit": "abea07a4f8f7d74dc467e089fd93fcdf867e2e4d",
+  "windows_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37114626731",
+  "macos_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37114626693",
+  "publication_checks_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37115248786",
+  "popup_checks": [
+    "native host unavailable: onboarding and GitHub link remain available",
+    "platform-specific installer selected",
+    "download controls disabled without compatible native host",
+    "English setup texts",
+    "native registration restored and connection detected without extension reload"
+  ],
+  "os_capture_counts": {
+    "Windows": 11,
+    "macOS Intel": 11,
+    "macOS Apple Silicon": 11
+  },
+  "public_downloads": {
+    "kitty-backend-v8.31-linux.zip": "e1880cd455ac796279659fafe361da208b745ecc52e8e95c9ca0bafa0c6fd264",
+    "kitty-backend-v8.31-windows-x64.zip": "032f8e3c3aec875304e786ee419b83c01e56a10c63bb5e7b9c8b1dc4a654bf1e",
+    "kitty-backend-v8.31-macos.zip": "9fee176a4e87693ca36613447d6281a4a3b7025681fca3804c8cff9ec1616352"
+  },
+  "mozilla_lint": {
+    "errors": 0,
+    "notices": 0,
+    "warnings": 13
+  },
+  "limitations": [
+    "Unsigned XPI; Mozilla signing and listed publication pending",
+    "No Android backend",
+    "Lint warnings documented for reviewer inspection",
+    "Online media/YouTube authentication not exercised by these bootstrap tests"
+  ]
+}
