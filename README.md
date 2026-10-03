@@ -36,6 +36,8 @@ La décompression écrase les fichiers de code correspondants et conserve les m�
 
 ## Validation et construction
 
+Les [releases GitHub et leur workflow](docs/RELEASES.md) distribuent séparément le backend v8.31 et l’interface v8.36, avec notes et SHA-256. La release backend reste « Latest » pour la recherche de mises à jour native.
+
 ```sh
 bash test.sh
 node tests/test-backend-bootstrap.js
