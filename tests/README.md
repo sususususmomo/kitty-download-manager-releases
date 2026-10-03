@@ -92,3 +92,16 @@ les images représentent des états stabilisés : elles ne valident pas les
 flashs très brefs, le sélecteur de dossier natif ni une installation manuelle
 sur un bureau Windows 10/11. Les versions Firefox et geckodriver sont inscrites
 dans le rapport. Les tests d’installation existants ont leur propre job.
+
+
+### Attente des diagnostics (V8.29)
+
+Le pilote attend la fin de la requête et le rendu d’une liste dans le groupe
+ouvert, puis accepte les trois états terminaux : prêt, avertissement et erreur.
+Il conserve le diagnostic natif complet, capture le groupe puis vérifie que
+les dépendances requises et les fichiers de runtime sont disponibles. L’état
+global peut être une erreur sur une installation fraîche dont la destination
+n’a pas encore été créée; cet état reste visible dans l’image et le rapport.
+
+`python3 tests/test-visual-capture.py` couvre les avertissements, les erreurs,
+les diagnostics encore en cours et les véritables défaillances du backend.

@@ -40,6 +40,8 @@ jobs:
         with:
           python-version: '3.13'
           architecture: x64
+      - name: Capture diagnostic regressions
+        run: python tests/test-visual-capture.py
       - name: Install browser test dependencies
         run: python -m pip install psutil selenium==4.50.0
       - name: Install Firefox from Mozilla
@@ -93,3 +95,4 @@ jobs:
           package-manager-cache: false
       - run: bash test.sh
       - run: python tests/test-windows-port.py
+      - run: python tests/test-visual-capture.py

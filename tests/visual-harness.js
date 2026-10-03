@@ -28,6 +28,11 @@ function popupState() {
     settings: !doc.getElementById("settingsView").classList.contains("hidden"),
     dependencies: text("dependencyStateText"),
     dependencyPhase: doc.querySelector('[data-settings-section="dependencies"]').className,
+    diagnosticsBusy: doc.getElementById("refreshDiagnostics").disabled,
+    dependencyCount: doc.querySelectorAll("#dependencyList .dependencyItem").length,
+    dependencyDetails: [...doc.querySelectorAll("#dependencyList .dependencyItem")]
+      .map(item => ({ text: item.textContent.trim(),
+        detail: item.querySelector(".dependencyValue")?.title || "" })),
     destination: text("destinationPath"),
     language: doc.getElementById("uiLanguage").value,
     sections: Object.fromEntries([...doc.querySelectorAll(".collapseSection")]
@@ -57,6 +62,11 @@ async function command(request) {
       return { closing: true };
     case "state":
       return popupState();
+    case "diagnostics":
+      return browser.runtime.sendNativeMessage("com.kitty.download_manager", {
+        action: "diagnostics",
+        client: { version: browser.runtime.getManifest().version, protocol: 1 },
+      });
     case "click": {
       const button = popupView()?.document.querySelector(request.selector);
       if (!button || button.disabled) throw new Error(`Bouton indisponible : ${request.selector}`);
@@ -67,7 +77,13 @@ async function command(request) {
       const view = popupView();
       if (!view) throw new Error("Popup absente");
       const scroll = view.document.body;
-      scroll.scrollTop = request.bottom ? scroll.scrollHeight : 0;
+      if (request.selector) {
+        const target = view.document.querySelector(request.selector);
+        if (!target) throw new Error(`Section absente : ${request.selector}`);
+        target.scrollIntoView({ block: "center" });
+      } else {
+        scroll.scrollTop = request.bottom ? scroll.scrollHeight : 0;
+      }
       return popupState();
     }
     default:

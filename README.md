@@ -1,4 +1,4 @@
-# Kitty Download Manager V8.28 — Windows x64, version de test
+# Kitty Download Manager V8.29 — Windows x64, version de test
 
 Cette distribution ajoute un installateur Windows à la base V8.24. Elle est
 destinée à Windows 10/11 x64 et à Firefox. L’installation ne nécessite ni Python
@@ -6,7 +6,7 @@ préinstallé ni droits administrateur. Une connexion Internet est nécessaire.
 
 ## Installation
 
-1. Extraire `kitty-download-manager-v8.28-windows-x64.zip`.
+1. Extraire `kitty-download-manager-v8.29-windows-x64.zip`.
 2. Ouvrir le dossier `kitty-download-manager`, puis double-cliquer sur `Install.cmd`.
 3. Attendre les téléchargements et les vérifications. En cas d’erreur, le message
    reste visible dans la fenêtre; ne pas considérer l’installation comme réussie.
@@ -33,7 +33,7 @@ Elle remplace les sources extraites, pas le dossier installé ni les réglages.
 ```powershell
 $downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 Set-Location -LiteralPath $downloads
-$zip = 'kitty-download-manager-v8.28-windows-x64.zip'
+$zip = 'kitty-download-manager-v8.29-windows-x64.zip'
 if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive absente de Téléchargements.' }
 if (Test-Path -LiteralPath '.\kitty-download-manager') { Remove-Item -LiteralPath '.\kitty-download-manager' -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
@@ -42,7 +42,7 @@ Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
 
 ## Extension Firefox permanente
 
-Le fichier `kitty-download-manager-v8.28-unsigned.xpi` est fourni pour la
+Le fichier `kitty-download-manager-v8.29-unsigned.xpi` est fourni pour la
 soumission à Mozilla. **Il n’est pas signé** : Firefox standard ne permet pas
 son installation permanente en l’état. Le chargement temporaire ci-dessus
 fonctionne pour les essais, mais doit être refait après un redémarrage de Firefox.
@@ -122,8 +122,10 @@ bloquants et provoquent la restauration du registre. La sortie de l’installate
 est en UTF-8 et la CI affiche une trace complète sur erreur.
 
 La V8.27 a ensuite passé le workflow Windows au vert, selon la confirmation
-de l’utilisateur. Les nouvelles captures de la V8.28 attendent leur premier
-passage sur GitHub Actions; aucun résultat visuel Windows n’est revendiqué ici.
+de l’utilisateur. Le journal V8.28 fourni par l’utilisateur confirme six captures Windows
+réussies. La septième a échoué sur une attente exigeant uniquement l’état
+vert des dépendances. La V8.29 corrige cette attente; son passage Windows
+reste à lancer.
 
 ```powershell
 python -m pip install psutil
@@ -168,23 +170,32 @@ Télécharger l’archive dans `~/Downloads`, puis exécuter :
 
 ```fish
 cd ~/Downloads
-and test -f kitty-download-manager-v8.28-windows-x64.zip
+and test -f kitty-download-manager-v8.29-windows-x64.zip
 and test -d kitty-download-manager/.git
-and unzip -o kitty-download-manager-v8.28-windows-x64.zip
+and unzip -o kitty-download-manager-v8.29-windows-x64.zip
 and cd kitty-download-manager
-and rm -f -- kitty-download-manager-v8.27-unsigned.xpi
+and rm -f -- kitty-download-manager-v8.28-unsigned.xpi
 and set kitty_login (gh api user --jq '.login')
 and set kitty_account_id (gh api user --jq '.id')
 and git add .
 and git -c user.name="$kitty_login" \
     -c user.email="$kitty_account_id+$kitty_login@users.noreply.github.com" \
     -c commit.gpgsign=false \
-    commit -m "Ajoute les captures Firefox Windows v8.28"
+    commit -m "Corrige l attente du diagnostic Firefox Windows v8.29"
 and git push
 ```
 
 Cette commande conserve le même dossier et son dépôt Git. Le push relance
 Actions sur la branche en cours.
+
+La V8.29 attend un diagnostic terminé, y compris avec avertissement ou erreur,
+au lieu d’exiger une couleur verte. Elle attend aussi la fin de la requête et
+la liste des dépendances, centre la dernière capture sur ce groupe et conserve
+le diagnostic natif complet dans `rapport.json`. Un problème de dépendance
+requise, de runtime ou de communication native reste un échec explicite après
+la capture. Un dossier de destination encore absent est présenté tel quel.
+Les attentes qui échouent ajoutent le dernier état de la popup au rapport et
+au journal. Cinq tests couvrent ces cas sur Linux et dans le job visuel Windows.
 
 ## Références techniques vérifiées le 3 octobre 2026
 

@@ -91,6 +91,29 @@ def example_state(root, populated):
     return state
 
 
+def diagnostics_rendered(state):
+    """A finished diagnostic may be ready, warning or error; capture all three."""
+    phases = set(str(state.get("dependencyPhase", "")).split())
+    return bool(
+        state.get("open") and state.get("ready") and state.get("settings")
+        and state.get("settingsSections", {}).get("dependencies")
+        and state.get("diagnosticsBusy") is False
+        and state.get("dependencyCount", 0) > 0
+        and phases.intersection({"dependencyReady", "dependencyWarning", "dependencyError"})
+    )
+
+
+def validate_capture_diagnostics(response):
+    """Keep capture success separate from health; fail on broken native dependencies."""
+    if not response.get("ok"):
+        raise RuntimeError(f"Diagnostic natif indisponible : {response}")
+    dependencies = response.get("dependencies", {})
+    if dependencies.get("required_ok") is not True:
+        raise RuntimeError(f"Dépendances requises indisponibles : {dependencies}")
+    if response.get("system", {}).get("runtime_files", {}).get("ok") is not True:
+        raise RuntimeError(f"Runtime installé incomplet : {response.get('system')}")
+
+
 def write_report(report):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "rapport.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -99,6 +122,13 @@ def write_report(report):
         f'<img src="{html.escape(item["file"])}" alt="{html.escape(item["label"])}"></figure>'
         for item in report["captures"])
     error = html.escape(report.get("error", ""))
+    health = report.get("diagnostics")
+    diagnostic_note = ""
+    if health:
+        destination = health.get("system", {}).get("destination", {})
+        diagnostic_note = (f'<p>Diagnostic réel du backend : <strong>{html.escape(str(health.get("overall")))}</strong>. '
+                           f'{html.escape(str(destination.get("error") or ""))} '
+                           'Les détails complets sont dans rapport.json.</p>')
     (OUTPUT / "index.html").write_text(
         '<!doctype html><html lang="fr"><meta charset="utf-8"><title>Kitty Windows — captures</title>'
         '<style>body{font:16px system-ui;background:#181b22;color:#e9edf5;margin:32px}'
@@ -107,7 +137,7 @@ def write_report(report):
         '<h1>Kitty — Firefox sur Windows</h1><p>Captures de la vraie popup dans un profil Firefox CI isolé. '
         'La file et l’historique utilisent des exemples; aucune vidéo réseau n’est téléchargée. '
         'Ces images montrent des états stabilisés et ne mesurent pas les flashs très brefs.</p>'
-        f'<p>Résultat : {html.escape(report["status"])}</p><pre>{error}</pre><main>{figures}</main></html>',
+        f'<p>Captures : {html.escape(report["status"])}</p>{diagnostic_note}<pre>{error}</pre><main>{figures}</main></html>',
         encoding="utf-8")
 
 
@@ -196,13 +226,16 @@ def run():
             """, request_id))
             if not result["ok"]:
                 raise RuntimeError(result["error"])
+            if action == "state":
+                report["last_popup_state"] = result["value"]
             return result["value"]
 
-        def wait_state(predicate):
+        def wait_state(predicate, label="état de la popup"):
             def check(_):
                 state = command("state")
                 return state if predicate(state) else False
-            return WebDriverWait(driver, 30, poll_frequency=.2).until(check)
+            return WebDriverWait(driver, 30, poll_frequency=.2).until(
+                check, message=f"Attente de {label}; dernier état détaillé dans rapport.json")
 
         def stable_state():
             # Stable geometry and completed startup, not a blind long delay.
@@ -240,7 +273,7 @@ def run():
             (OUTPUT / filename).write_bytes(png)
             report["captures"].append({"file": filename, "label": label, "state": state, **image})
             write_report(report)
-            print(f"Capture : {filename} ({width} × {height})", flush=True)
+            print(f"Capture : {filename} ({width} x {height})", flush=True)
 
         response = command("prepare")
         if not response.get("ok") or response.get("state", {}).get("queue_paused") is not True:
@@ -272,14 +305,18 @@ def run():
         command("scroll", bottom=False)
         capture("06-reglages", "Réglages — groupes repliés")
         command("click", selector='[data-settings-section="dependencies"] .settingsGroupToggle')
-        wait_state(lambda state: state.get("settingsSections", {}).get("dependencies")
-                   and "dependencyReady" in state.get("dependencyPhase", ""))
+        wait_state(diagnostics_rendered, label="la fin du diagnostic, quel que soit son état de santé")
+        report["diagnostics"] = command("diagnostics")
+        command("scroll", selector='[data-settings-section="dependencies"]')
         capture("07-dependances", "Réglages — dépendances du backend Windows")
+        validate_capture_diagnostics(report["diagnostics"])
         report["status"] = "réussi"
     except Exception:
         report["status"] = "échec"
         report["error"] = traceback.format_exc()
         print(report["error"], file=sys.stderr)
+        if report.get("last_popup_state"):
+            print("Dernier état popup : " + json.dumps(report["last_popup_state"], ensure_ascii=False), file=sys.stderr)
         if driver:
             try:
                 with driver.context(driver.CONTEXT_CHROME):
@@ -316,4 +353,7 @@ def run():
 
 
 if __name__ == "__main__":
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     raise SystemExit(run())

@@ -1,76 +1,80 @@
-Kitty Download Manager V8.28 — Windows x64, captures Firefox en CI
+Kitty Download Manager V8.29 — correction des captures Firefox Windows
 
-Changement V8.28 :
-- Job Windows visuel séparé des tests d'installation déjà existants.
-- Firefox officiel téléchargé depuis Mozilla, signature Authenticode contrôlée.
-- Selenium 4.50.0 et geckodriver géré automatiquement dans le runner.
-- Profil Firefox neuf, extension temporaire, vraie popup de la barre d'outils.
-- Page de pilotage ajoutée uniquement au XPI temporaire de test : les fichiers
-  de production et les permissions du manifeste restent identiques.
-- Vérification de Native Messaging depuis Firefox avant les captures.
-- Sept vues PNG : principal vide, dernier téléchargement terminé, file ouverte,
-  file après défilement, historique, réglages, dépendances Windows.
-- File/historique avec des exemples signalés « Exemple CI », file en pause et
-  titres complets pour éviter probes et téléchargements de médias réseau.
-- État de file d'origine restauré après la fermeture de Firefox.
-- Galerie HTML, rapport JSON, versions Firefox/geckodriver et journal conservés
-  dans l'artefact kitty-windows-firefox-captures, y compris après un échec.
+Résultat distant V8.28 fourni par l'utilisateur :
+- Six PNG produits dans la vraie popup Firefox sous Windows.
+- Timeout sur la septième capture : l'attente exigeait dependencyReady.
+- Le journal ne contient pas l'état terminal exact du diagnostic.
 
-Évidence Windows antérieure :
-- L'utilisateur a confirmé le workflow V8.27 entièrement vert sur GitHub Actions
-  le 3 octobre 2026. Nous n'avons pas lancé cette exécution distante nous-mêmes.
-- Ce workflow couvre installation, registre 32/64 bits, lanceur natif, mise à jour,
-  conservation des réglages/historique, annulation et arrêt des vrais processus,
-  remux audio sans réseau et désinstallation avec nettoyage différé.
+Correction V8.29 :
+- Attente de la fin de la requête et d'une liste rendue dans le groupe ouvert.
+- Les états prêt, avertissement et erreur sont tous capturés.
+- Diagnostic natif complet conservé dans rapport.json et état de santé visible
+  dans la galerie; la dernière image est centrée sur les dépendances.
+- Les dépendances requises manquantes, un runtime incomplet ou un diagnostic
+  natif indisponible restent des échecs explicites après la capture.
+- Dernier état de la popup et détails des dépendances joints au rapport et au
+  journal en cas d'échec; sorties CLI UTF-8.
 
-Validation V8.28 locale sous Linux (3 octobre 2026) :
-- 94 régressions réussies, 0 échec, 5 vérifications Chromium ignorées.
-- 28 tests portables réussis, 4 tests exigeant Windows ignorés.
-- 4 tests d'installation Windows ignorés localement.
-- Pilote de captures ignoré conformément à sa garde Windows/CI.
-- Le XPI de test a été reconstruit et comparé octet par octet aux fichiers de
-  production; seuls les deux fichiers de pilotage sont ajoutés.
-- Les deux états d'exemples ont été vérifiés par le schéma de queue_store :
-  aucune migration requise et aucun job sans titre/métadonnées prêtes.
-- Syntaxe Python et JavaScript, structure YAML et archives ZIP/XPI vérifiées.
+Validation locale V8.29 :
+- 5 tests de régression des captures réussis, sans Selenium ni Windows.
+- 94 régressions générales réussies, 0 échec, 5 visuels Chromium ignorés.
+- 28 tests portables réussis, 4 nécessitant Windows ignorés.
+- Cas reproduit avec la vraie fonction diagnostics(), un dossier temporaire
+  inexistant et des dépendances simulées disponibles : état global error,
+  required_ok=true. Ancienne attente bloquée; nouvelle attente accepte le
+  diagnostic terminé et conserve son état d'erreur. Aucune modification de
+  cette logique de diagnostic dans l'application.
+- Syntaxe Python/JavaScript, structure YAML, ZIP/XPI et exclusion des fichiers
+  de pilotage du XPI distribué vérifiées.
 
 Limites :
-- Firefox/Windows/PowerShell ne sont pas disponibles dans notre environnement.
-- Le nouveau job visuel V8.28 attend son PREMIER passage sur GitHub Actions.
-  Aucune capture Windows n'a été générée ou validée ici.
-- Les PNG montrent des états stabilisés dans Firefox headless : pas de preuve
-  concernant les flashs très brefs, le sélecteur de dossier natif, les différentes
-  échelles DPI ou une installation manuelle sur un bureau Windows 10/11.
-- Le XPI reste non signé. La base Linux V8.24 séparée n'a pas été modifiée.
+- Le nouveau passage V8.29 sur GitHub Actions reste à lancer.
+- Aucune nouvelle capture Windows n'a été produite localement.
+- Les six captures V8.28 déjà produites sont récupérables dans l'artefact du
+  lancement échoué grâce à l'upload always().
+- Le XPI distribué reste non signé. La version Linux V8.24 séparée est intacte.
 
-Journal des régressions V8.28 :
+Tests des captures V8.29 :
+
+test_finished_warning_and_error_do_not_wait_for_green (__main__.CaptureDiagnosticTests.test_finished_warning_and_error_do_not_wait_for_green) ... ok
+test_new_destination_error_does_not_invalidate_captured_ui (__main__.CaptureDiagnosticTests.test_new_destination_error_does_not_invalidate_captured_ui) ... ok
+test_optional_dependency_warning_is_preserved (__main__.CaptureDiagnosticTests.test_optional_dependency_warning_is_preserved) ... ok
+test_required_dependency_or_runtime_failure_remains_an_error (__main__.CaptureDiagnosticTests.test_required_dependency_or_runtime_failure_remains_an_error) ... ok
+test_unfinished_or_hidden_diagnostic_still_waits (__main__.CaptureDiagnosticTests.test_unfinished_or_hidden_diagnostic_still_waits) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK
+
+Régressions V8.29 :
 
 Kitty Download Manager — tests de régression
 Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 
-✓ Stockage partagé : concurrence et interruptions (599 ms)
+✓ Stockage partagé : concurrence et interruptions (617 ms)
 ✓ Structure du paquet (0 ms)
 ✓ Contrat manifest Firefox (0 ms)
 ✓ Contrat Native Messaging (0 ms)
-✓ Syntaxe Python (39 ms)
+✓ Syntaxe Python (38 ms)
 ✓ Versions cohérentes (1 ms)
 ✓ Gardes de coût du resolver (1 ms)
-✓ Syntaxe JavaScript (296 ms)
+✓ Syntaxe JavaScript (290 ms)
 ✓ Universal Media Resolver (56 ms)
-✓ Installation dans HOME isolé (247 ms)
-✓ Compatibilité frontend/backend (3 ms)
-✓ Blocage mutations incompatibles (416 ms)
-✓ Updater sûr conserve état (537 ms)
-✓ Uninstaller safe + purge (535 ms)
-✓ Migration V7 → V8 complète (259 ms)
-✓ Migration conserve destination custom (225 ms)
-✓ Migration bloque worker V7 actif (33 ms)
+✓ Installation dans HOME isolé (234 ms)
+✓ Compatibilité frontend/backend (2 ms)
+✓ Blocage mutations incompatibles (405 ms)
+✓ Updater sûr conserve état (511 ms)
+✓ Uninstaller safe + purge (560 ms)
+✓ Migration V7 → V8 complète (264 ms)
+✓ Migration conserve destination custom (254 ms)
+✓ Migration bloque worker V7 actif (35 ms)
 ✓ Identité runtime V8 propre (1 ms)
-✓ Protocole Native Messaging (1057 ms)
+✓ Protocole Native Messaging (1013 ms)
 ✓ Canonicalisation backend (23 ms)
-✓ Migration + récupération queue.json (3 ms)
-✓ Réglages + reset sûr (4 ms)
-✓ Sémantique de la file sans réseau (6 ms)
+✓ Migration + récupération queue.json (4 ms)
+✓ Réglages + reset sûr (5 ms)
+✓ Sémantique de la file sans réseau (8 ms)
 ✓ Noms + nettoyage des fichiers (1 ms)
 ✓ Clic/drag des pills compactes (0 ms)
 ✓ Fond lisible du Chat ASCII (0 ms)
@@ -92,9 +96,9 @@ Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 ✓ Capsule source aplatie (0 ms)
 ✓ Toute la capsule ouvre la source (0 ms)
 ✓ Icônes sources + bouton cliquable (0 ms)
-✓ Détection visuelle des plateformes (59 ms)
-✓ SIGTERM externe gèle + requeue (3 ms)
-✓ SIGTERM manuel respecte lane prioritaire (2 ms)
+✓ Détection visuelle des plateformes (52 ms)
+✓ SIGTERM externe gèle + requeue (2 ms)
+✓ SIGTERM manuel respecte lane prioritaire (1 ms)
 ✓ Signal externe vs annulation Kitty (1 ms)
 ✓ Annuler marque le contrôle avant SIGTERM (2 ms)
 ✓ Arrêt externe ne lance pas le suivant (0 ms)
@@ -104,53 +108,53 @@ Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 ✓ Contrat erreurs terminales worker (0 ms)
 ✓ UI messages d’erreur personnalisés (0 ms)
 ✓ État structuré des dépendances (87 ms)
-✓ Dépendance requise absente (45 ms)
-✓ UI diagnostic système (1 ms)
-✓ Rapport mises à jour sans réseau (1 ms)
-✓ Rotation bornée des logs (30 ms)
-✓ Nettoyage cache sûr (263 ms)
+✓ Dépendance requise absente (42 ms)
+✓ UI diagnostic système (0 ms)
+✓ Rapport mises à jour sans réseau (2 ms)
+✓ Rotation bornée des logs (29 ms)
+✓ Nettoyage cache sûr (258 ms)
 ✓ UI maintenance cache (1 ms)
 ✓ i18n catalogue erreurs complet (2 ms)
 ✓ i18n popup statique couvert (5 ms)
 ↷ Audit English sans résidu français — Chromium indisponible
-✓ i18n sans changement des clés internes (0 ms)
+✓ i18n sans changement des clés internes (1 ms)
 ↷ Toggle FR/EN popup dans Chromium — Chromium indisponible
 ↷ Toggle FR/EN pill dans Chromium — Chromium indisponible
 ✓ Ordre init protocole popup (0 ms)
-✓ Démarrage popup avec chargements différés (57 ms)
+✓ Démarrage popup avec chargements différés (60 ms)
 ↷ Popup interactive dans Chromium — Chromium indisponible
 ✓ UI compatibilité + updates (1 ms)
-✓ Clic droit Kitty en un clic (62 ms)
+✓ Clic droit Kitty en un clic (57 ms)
 ✓ Release GitHub + SHA-256 (3 ms)
 ✓ Rejet release SHA-256 invalide (1 ms)
 ✓ Diagnostic copié sans contenu job (0 ms)
-✓ Supervision métadonnées (4 ms)
+✓ Supervision métadonnées (3 ms)
 ✓ Fallback UI métadonnées (0 ms)
 ✓ Collections refusent les pochettes (2 ms)
-✓ Validation média refuse les images (48 ms)
-✓ Sélection finale préfère le média (84 ms)
-✓ Manuels devant backlog playlist (FIFO) (69 ms)
+✓ Validation média refuse les images (43 ms)
+✓ Sélection finale préfère le média (80 ms)
+✓ Manuels devant backlog playlist (FIFO) (64 ms)
 ✓ Priorité respecte pause globale (2 ms)
 ✓ Réparation ancienne queue mixte (2 ms)
 ✓ Contrat UI priorité de file (48 ms)
-✓ Vider la file préserve l’actif (13 ms)
+✓ Vider la file préserve l’actif (11 ms)
 ✓ Contrat UI Vider la file (0 ms)
-✓ Progression Playlist persistante (49 ms)
-✓ Contrat UI Playlist (1 ms)
+✓ Progression Playlist persistante (51 ms)
+✓ Contrat UI Playlist (0 ms)
 ✓ Canonicalisation URL Playlist (2 ms)
 ✓ Résolution entrées de collection (1 ms)
 ✓ Détection collections SoundCloud (1 ms)
-✓ Isolation cookies YouTube collections (2 ms)
-✓ Profil SoundCloud dans la file (3 ms)
+✓ Isolation cookies YouTube collections (1 ms)
+✓ Profil SoundCloud dans la file (2 ms)
 ✓ File Playlist sans réseau (3 ms)
 ✓ Isolation session YouTube (9 ms)
 ✓ Fermeture Firefox + lock orphelin (4 ms)
-✓ Snapshot YouTube figé par job (2 ms)
+✓ Snapshot YouTube figé par job (1 ms)
 ✓ Historique + écritures atomiques (2 ms)
 
 Résultat : 94 OK, 0 échec(s), 5 ignoré(s)
 
-Tests portables V8.28 :
+Tests portables V8.29 :
 
 test_bad_hash_is_removed (__main__.InstallerTests.test_bad_hash_is_removed) ... ok
 test_download_verifies_size_and_sha256 (__main__.InstallerTests.test_download_verifies_size_and_sha256) ... ok
@@ -186,18 +190,6 @@ test_real_windows_stop_preserves_partial_and_requeues_job (__main__.WindowsProce
 test_windows_survival_after_parent_job_closes (__main__.WindowsProcessTests.test_windows_survival_after_parent_job_closes) ... skipped 'Exige un vrai Windows et psutil'
 
 ----------------------------------------------------------------------
-Ran 32 tests in 0.451s
-
-OK (skipped=4)
-
-Tests sur installation Windows (ignorés ici) :
-
-test_01_installed_batch_launcher_and_registry_both_views (__main__.InstalledWindowsTests.test_01_installed_batch_launcher_and_registry_both_views) ... skipped 'Exige une installation Windows neuve et KITTY_INSTALLED_TEST=1'
-test_02_upgrade_preserves_configuration_and_history (__main__.InstalledWindowsTests.test_02_upgrade_preserves_configuration_and_history) ... skipped 'Exige une installation Windows neuve et KITTY_INSTALLED_TEST=1'
-test_03_remux_original_audio_without_network (__main__.InstalledWindowsTests.test_03_remux_original_audio_without_network) ... skipped 'Exige une installation Windows neuve et KITTY_INSTALLED_TEST=1'
-test_99_uninstall_preserves_data_and_removes_native_registration (__main__.InstalledWindowsTests.test_99_uninstall_preserves_data_and_removes_native_registration) ... skipped 'Exige une installation Windows neuve et KITTY_INSTALLED_TEST=1'
-
-----------------------------------------------------------------------
-Ran 4 tests in 0.000s
+Ran 32 tests in 0.504s
 
 OK (skipped=4)
