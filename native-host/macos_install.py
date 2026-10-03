@@ -207,7 +207,7 @@ def install(args):
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
         if result.returncode:
             raise RuntimeError("Dépendances Python privées invalides : " + result.stderr.decode("utf-8", "replace")[-1000:])
-        native_query(python, path / "backend", "get_settings")
+        settings = native_query(python, path / "backend", "get_settings")["settings"]
         response = native_query(python, path / "backend", "compatibility")
         if response.get("compatibility", {}).get("backend_version") != version:
             raise RuntimeError("Versions du backend et de l’extension différentes.")
@@ -217,13 +217,18 @@ def install(args):
             diagnostics = native_query(python, path / "backend", "diagnostics")
             if diagnostics.get("dependencies", {}).get("required_ok") is not True:
                 raise RuntimeError("Dépendances privées indisponibles : " + str(diagnostics.get("dependencies")))
+        return settings
     print("Vérification du protocole Firefox…", flush=True)
-    validate_runtime(stage, full=False)
+    settings = validate_runtime(stage, full=False)
     with queue_lock(root / "install.lock"):
         previous = current_install(root)
         if previous and tuple(map(int, previous["version"].split('.'))) > tuple(map(int, version.split('.'))):
             raise RuntimeError("Retour à une version plus ancienne refusé.")
         with paused_maintenance(root, previous):
+            # A fresh install must have a usable destination before Firefox's
+            # first diagnostic. Leave a custom destination under user control.
+            if Path(settings["output_dir"]) == default_output_dir():
+                default_output_dir().mkdir(parents=True, exist_ok=True)
             installed = commit_install(root, stage, version, validate=validate_runtime)
         keep = {installed.name}
         if previous:

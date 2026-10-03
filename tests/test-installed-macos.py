@@ -45,6 +45,8 @@ class InstalledMacTests(unittest.TestCase):
         diagnostics = self.query("diagnostics")
         self.assertEqual(diagnostics["dependencies"]["required_missing"], [])
         self.assertTrue(diagnostics["system"]["runtime_files"]["ok"])
+        self.assertTrue(diagnostics["system"]["destination"]["directory"])
+        self.assertTrue(diagnostics["system"]["destination"]["writable"])
         manifest = json.loads(app_paths.native_manifest_path().read_text())
         self.assertEqual(manifest["path"], str(root / "native-host.sh"))
         self.assertEqual(manifest["allowed_extensions"], [app_paths.FIREFOX_EXTENSION_ID])
