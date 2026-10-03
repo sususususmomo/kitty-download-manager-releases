@@ -12,6 +12,11 @@ function popupState() {
   const view = popupView();
   if (!view) return { open: false };
   const doc = view.document;
+  // Firefox can expose the popup view before parsing its document finishes.
+  // Keep polling until the real DOM exists, including on fast ARM runners.
+  if (!doc?.getElementById("settingsView") || !["interactive", "complete"].includes(doc.readyState)) {
+    return { open: true, ready: false };
+  }
   const text = id => doc.getElementById(id)?.textContent || "";
   const scroll = doc.body;
   return {

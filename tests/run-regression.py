@@ -2423,16 +2423,18 @@ def test_github_release_check_and_sha256_download():
         home = Path(tmp) / "home"
         home.mkdir(parents=True)
         host = load_module(NATIVE / "host.py", f"kitty_host_release_{os.getpid()}_{time.time_ns()}", home)
+        parts = host.APP_VERSION.split(".")
+        release_version = ".".join(parts[:-1] + [str(int(parts[-1]) + 1)])
 
         asset_bytes = (b"KITTY-RELEASE-ZIP\n" * 257) + b"END"
         digest = hashlib.sha256(asset_bytes).hexdigest()
         release_payload = {
-            "tag_name": "v8.31",
-            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.31",
+            "tag_name": f"v{release_version}",
+            "html_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v{release_version}",
             "published_at": "2026-10-03T00:00:00Z",
             "assets": [{
-                "name": "kitty-download-manager-v8.31.zip",
-                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.31/kitty-download-manager-v8.31.zip",
+                "name": f"kitty-download-manager-v{release_version}.zip",
+                "browser_download_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v{release_version}/kitty-download-manager-v{release_version}.zip",
                 "size": len(asset_bytes),
                 "digest": f"sha256:{digest}",
             }],
@@ -2461,8 +2463,8 @@ def test_github_release_check_and_sha256_download():
         host.urlopen = fake_urlopen
         report = host.check_kitty_release(save_cache=True)
         check(report.get("ok") is True, "check release GitHub simulé échoué")
-        check(report.get("update_available") is True, "release v8.31 non détectée")
-        equal(report.get("latest_version"), "8.31", "version release normalisée")
+        check(report.get("update_available") is True, f"release v{release_version} non détectée")
+        equal(report.get("latest_version"), release_version, "version release normalisée")
         equal(report.get("asset_sha256"), digest, "digest GitHub non lu")
         check(report.get("download_supported") is True, "download devrait être autorisé avec SHA-256")
         check(host.KITTY_RELEASE_CACHE_FILE.is_file(), "cache release absent")
@@ -2471,7 +2473,7 @@ def test_github_release_check_and_sha256_download():
         check(result.get("ok") is True, f"download release simulé échoué: {result}")
         check(result.get("verified") is True, "SHA-256 non marqué vérifié")
         equal(result.get("sha256"), digest, "SHA-256 téléchargé incorrect")
-        target = home / "Downloads" / "kitty-download-manager-v8.31.zip"
+        target = home / "Downloads" / f"kitty-download-manager-v{release_version}.zip"
         equal(target.read_bytes(), asset_bytes, "archive vérifiée non écrite dans Downloads")
 
 
@@ -2480,16 +2482,18 @@ def test_github_release_rejects_bad_sha256():
         home = Path(tmp) / "home"
         home.mkdir(parents=True)
         host = load_module(NATIVE / "host.py", f"kitty_host_badsha_{os.getpid()}_{time.time_ns()}", home)
+        parts = host.APP_VERSION.split(".")
+        release_version = ".".join(parts[:-1] + [str(int(parts[-1]) + 1)])
 
         asset_bytes = b"CORRUPTED-RELEASE"
         expected_digest = hashlib.sha256(b"EXPECTED-RELEASE").hexdigest()
         release_payload = {
-            "tag_name": "v8.31",
-            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.31",
+            "tag_name": f"v{release_version}",
+            "html_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v{release_version}",
             "published_at": "2026-10-03T00:00:00Z",
             "assets": [{
-                "name": "kitty-download-manager-v8.31.zip",
-                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.31/kitty-download-manager-v8.31.zip",
+                "name": f"kitty-download-manager-v{release_version}.zip",
+                "browser_download_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v{release_version}/kitty-download-manager-v{release_version}.zip",
                 "size": len(asset_bytes),
                 "digest": f"sha256:{expected_digest}",
             }],
@@ -2518,7 +2522,7 @@ def test_github_release_rejects_bad_sha256():
         check(result.get("ok") is False, "archive au mauvais SHA-256 acceptée")
         equal(result.get("code"), "kitty_update_integrity_failed", "code mauvais SHA-256")
         check(result.get("verified") is False, "mauvais SHA-256 marqué vérifié")
-        check(not (home / "Downloads" / "kitty-download-manager-v8.31.zip").exists(), "archive corrompue conservée")
+        check(not (home / "Downloads" / f"kitty-download-manager-v{release_version}.zip").exists(), "archive corrompue conservée")
 
 
 
