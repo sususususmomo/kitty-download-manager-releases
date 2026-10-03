@@ -32,7 +32,12 @@ def proof_api():
     def read(path):
         if path.startswith("git/trees/"):
             return {"tree": tree, "truncated": False}
+        workflow_paths = {"windows_run": ".github/workflows/windows-validation.yml",
+                          "macos_run": ".github/workflows/macos-validation.yml",
+                          "publication_checks_run": ".github/workflows/backend-downloads.yml"}
+        workflow_path = next(value for key, value in workflow_paths.items() if path.endswith(proof[key].split("/")[-1]))
         return {"head_sha": proof["tested_application_commit"], "conclusion": "success", "event": "push",
+                "path": workflow_path,
                 "head_repository": {"full_name": release.REPO}}
     return read
 
@@ -152,7 +157,8 @@ class ReleaseTests(unittest.TestCase):
 
     def test_proof_refuses_failed_or_different_commit_run(self):
         read = proof_api()
-        for field, value in (("conclusion", "failure"), ("head_sha", "0" * 40), ("event", "pull_request")):
+        for field, value in (("conclusion", "failure"), ("head_sha", "0" * 40),
+                             ("event", "pull_request"), ("path", ".github/workflows/unrelated.yml")):
             def altered(path):
                 data = read(path)
                 if path.startswith("actions/"):

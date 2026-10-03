@@ -79,14 +79,18 @@ def verify_proof(frontend, backend):
     if expected != actual:
         changed = sorted(p for p in expected.keys() | actual.keys() if expected.get(p) != actual.get(p))
         raise ValueError("Application changed since OS validation: " + ", ".join(changed))
-    for key in ("windows_run", "macos_run", "publication_checks_run"):
+    workflows = {"windows_run": ".github/workflows/windows-validation.yml",
+                 "macos_run": ".github/workflows/macos-validation.yml",
+                 "publication_checks_run": ".github/workflows/backend-downloads.yml"}
+    for key, workflow_path in workflows.items():
         url = proof[key]
         match = re.fullmatch(rf"https://github.com/{re.escape(REPO)}/actions/runs/(\d+)", url)
         if not match:
             raise ValueError("Invalid validation workflow URL")
         workflow = api(f"actions/runs/{match[1]}")
         if (workflow["head_sha"] != commit or workflow["conclusion"] != "success"
-                or workflow["event"] != "push"
+                or workflow["event"] not in ("push", "workflow_dispatch")
+                or workflow["path"] != workflow_path
                 or workflow["head_repository"]["full_name"] != REPO):
             raise ValueError("OS/publication validation did not succeed for this source: " + url)
     print("Unchanged application matches successful Windows, macOS and publication checks.")
