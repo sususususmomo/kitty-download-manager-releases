@@ -1,4 +1,4 @@
-# Kitty Download Manager V8.27 — Windows x64, version de test
+# Kitty Download Manager V8.28 — Windows x64, version de test
 
 Cette distribution ajoute un installateur Windows à la base V8.24. Elle est
 destinée à Windows 10/11 x64 et à Firefox. L’installation ne nécessite ni Python
@@ -6,7 +6,7 @@ préinstallé ni droits administrateur. Une connexion Internet est nécessaire.
 
 ## Installation
 
-1. Extraire `kitty-download-manager-v8.27-windows-x64.zip`.
+1. Extraire `kitty-download-manager-v8.28-windows-x64.zip`.
 2. Ouvrir le dossier `kitty-download-manager`, puis double-cliquer sur `Install.cmd`.
 3. Attendre les téléchargements et les vérifications. En cas d’erreur, le message
    reste visible dans la fenêtre; ne pas considérer l’installation comme réussie.
@@ -33,7 +33,7 @@ Elle remplace les sources extraites, pas le dossier installé ni les réglages.
 ```powershell
 $downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 Set-Location -LiteralPath $downloads
-$zip = 'kitty-download-manager-v8.27-windows-x64.zip'
+$zip = 'kitty-download-manager-v8.28-windows-x64.zip'
 if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive absente de Téléchargements.' }
 if (Test-Path -LiteralPath '.\kitty-download-manager') { Remove-Item -LiteralPath '.\kitty-download-manager' -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
@@ -42,7 +42,7 @@ Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
 
 ## Extension Firefox permanente
 
-Le fichier `kitty-download-manager-v8.27-unsigned.xpi` est fourni pour la
+Le fichier `kitty-download-manager-v8.28-unsigned.xpi` est fourni pour la
 soumission à Mozilla. **Il n’est pas signé** : Firefox standard ne permet pas
 son installation permanente en l’état. Le chargement temporaire ci-dessus
 fonctionne pour les essais, mais doit être refait après un redémarrage de Firefox.
@@ -93,11 +93,10 @@ verrouiller les fichiers d’un programme en cours d’exécution.
 ## Validation et limites
 
 Les vérifications exécutées ici sont détaillées dans `tests/VALIDATION-WINDOWS.txt`.
-Les tests portables et les régressions sur Linux passent. Aucun vrai système
-Windows ni PowerShell n’est disponible dans cet environnement; l’installation,
-les API Win32, le sélecteur de dossier et Firefox Windows restent à valider.
-Cette distribution est donc une **version de test**, pas une release Windows
-déclarée stable.
+Les tests portables et les régressions sur Linux passent. L’utilisateur a
+confirmé un passage GitHub Actions Windows entièrement vert pour la V8.27.
+Le sélecteur de dossier et l’utilisation interactive sur un bureau Windows
+restent à essayer. Cette distribution reste une **version de test**.
 
 La validation automatisée Windows est préparée dans
 `.github/workflows/windows-validation.yml`. Elle couvre les vrais verrous
@@ -122,8 +121,9 @@ réellement effacés après la sortie du désinstalleur. Les refus d’accès re
 bloquants et provoquent la restauration du registre. La sortie de l’installateur
 est en UTF-8 et la CI affiche une trace complète sur erreur.
 
-Le workflow V8.27 doit encore être relancé sur un vrai Windows; les résultats
-Linux locaux ne valident pas à eux seuls l’installation Windows ni Firefox.
+La V8.27 a ensuite passé le workflow Windows au vert, selon la confirmation
+de l’utilisateur. Les nouvelles captures de la V8.28 attendent leur premier
+passage sur GitHub Actions; aucun résultat visuel Windows n’est revendiqué ici.
 
 ```powershell
 python -m pip install psutil
@@ -132,6 +132,59 @@ python tests/test-windows-port.py
 
 `tests/test-installed-windows.py` est réservé à une installation CI neuve : il
 désinstalle Kitty à la fin et exige explicitement `KITTY_INSTALLED_TEST=1`.
+
+## Voir Kitty sur Windows sans machine Windows
+
+La V8.28 ajoute le job **Firefox Windows — captures de Kitty**. Il installe
+Firefox officiel et Kitty sur le Windows de GitHub Actions, charge la vraie
+popup dans un profil Firefox temporaire et vérifie la communication native.
+Aucune VM ni installation Windows ne tourne sur ton PC.
+
+Après avoir poussé les sources sur ta branche habituelle :
+
+1. Ouvrir **Actions**, puis le dernier lancement **Kitty Windows validation**.
+2. Attendre la fin du job **Firefox Windows — captures de Kitty**.
+3. Au bas de la page du lancement, dans **Artifacts**, télécharger
+   **kitty-windows-firefox-captures**.
+4. Extraire les fichiers puis ouvrir **index.html**, ou directement les PNG.
+
+Les sept images montrent le principal vide, le dernier téléchargement terminé,
+la file ouverte, son bas après défilement, l’historique, les réglages repliés et
+les dépendances. Les éléments affichés sont signalés **Exemple CI**. La file
+reste en pause, aucune vidéo réseau n’est téléchargée. Le backend et les
+réponses Native Messaging sont réels; les fichiers de la popup ne sont pas
+remplacés par un rendu factice. La page de pilotage n’est pas dans le XPI distribué.
+
+Les captures sont faites en mode headless par Gecko sur Windows. Elles
+représentent des états stabilisés et ne mesurent pas les flashs très brefs ni
+les dialogues Windows. Le rapport JSON contient les versions réellement
+utilisées. Le job est séparé des tests d’installation déjà validés. Les images
+partielles et journaux sont récupérables même si une capture échoue; l’artefact
+expire après 14 jours.
+
+### Commande complète — fish pour ta branche GitHub existante
+
+Télécharger l’archive dans `~/Downloads`, puis exécuter :
+
+```fish
+cd ~/Downloads
+and test -f kitty-download-manager-v8.28-windows-x64.zip
+and test -d kitty-download-manager/.git
+and unzip -o kitty-download-manager-v8.28-windows-x64.zip
+and cd kitty-download-manager
+and rm -f -- kitty-download-manager-v8.27-unsigned.xpi
+and set kitty_login (gh api user --jq '.login')
+and set kitty_account_id (gh api user --jq '.id')
+and git add .
+and git -c user.name="$kitty_login" \
+    -c user.email="$kitty_account_id+$kitty_login@users.noreply.github.com" \
+    -c commit.gpgsign=false \
+    commit -m "Ajoute les captures Firefox Windows v8.28"
+and git push
+```
+
+Cette commande conserve le même dossier et son dépôt Git. Le push relance
+Actions sur la branche en cours.
 
 ## Références techniques vérifiées le 3 octobre 2026
 

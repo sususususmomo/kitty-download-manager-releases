@@ -30,6 +30,56 @@ jobs:
           $env:KITTY_INSTALLED_TEST='1'
           python tests/test-installed-windows.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  windows-visual:
+    name: Firefox Windows — captures de Kitty
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install browser test dependencies
+        run: python -m pip install psutil selenium==4.50.0
+      - name: Install Firefox from Mozilla
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force artifacts/windows-firefox | Out-Null
+          $setup = Join-Path $env:RUNNER_TEMP 'kitty-firefox-setup.exe'
+          $firefoxDir = Join-Path $env:RUNNER_TEMP 'kitty-firefox'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr' -OutFile $setup
+          $signature = Get-AuthenticodeSignature -LiteralPath $setup
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Mozilla Corporation') {
+            throw 'Signature Mozilla invalide pour Firefox.'
+          }
+          $process = Start-Process -FilePath $setup -ArgumentList @('/S', "/InstallDirectoryPath=`"$firefoxDir`"", '/DesktopShortcut=false', '/TaskbarShortcut=false', '/StartMenuShortcut=false', '/MaintenanceService=false') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installation Firefox : $($process.ExitCode)" }
+          $binary = Join-Path $firefoxDir 'firefox.exe'
+          if (-not (Test-Path -LiteralPath $binary)) { throw 'Exécutable Firefox absent.' }
+          "KITTY_FIREFOX_BINARY=$binary" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Fresh Kitty Windows installation
+        shell: powershell
+        run: |
+          $env:KITTY_INSTALL_TRACEBACK='1'
+          & .\Install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Capture the actual Firefox toolbar popup
+        env:
+          KITTY_VISUAL_TEST: '1'
+          SE_SKIP_DRIVER_IN_PATH: 'true'
+          SE_AVOID_STATS: 'true'
+          MOZ_HEADLESS_WIDTH: '1100'
+          MOZ_HEADLESS_HEIGHT: '800'
+        run: python tests/capture-windows-firefox.py
+      - name: Downloadable screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kitty-windows-firefox-captures
+          path: artifacts/windows-firefox/
+          if-no-files-found: warn
+          retention-days: 14
   linux-regression:
     runs-on: ubuntu-latest
     steps:

@@ -68,3 +68,27 @@ avec des réponses retardées : l'interface n'est révélée qu'une fois le stat
 les préférences traités, et la lecture native possède une sortie sur timeout.
 La suite vérifie aussi l'ordre du démarrage des polls et des réglages cachés.
 Ce test ne remplace pas la vérification du premier rendu dans Firefox.
+
+## Captures Firefox sur Windows (V8.28)
+
+Le job `windows-visual` de `.github/workflows/windows-validation.yml` installe
+Firefox officiel et Kitty sur un runner Windows neuf. Selenium 4.50.0 charge
+une extension temporaire dont les fichiers de production sont inchangés; seule
+une page de pilotage est ajoutée à ce XPI de test, dans un profil isolé.
+
+`capture-windows-firefox.py` ouvre la vraie popup de la barre d’outils, vérifie
+Native Messaging depuis Firefox et capture son viewport avec le moteur Gecko.
+La file est en pause, les titres sont complets et l’historique est marqué
+« Exemple CI »; aucun téléchargement de média ni probe réseau n’est lancé.
+Le fichier de file original est restauré après la fermeture de Firefox.
+
+Le script exige Windows, `GITHUB_ACTIONS=true` et `KITTY_VISUAL_TEST=1`. Il est
+ignoré ailleurs. Il produit sept PNG, une galerie `index.html`, un rapport JSON
+et le journal geckodriver, publiés dans l’artefact
+`kitty-windows-firefox-captures` même après un échec de capture.
+
+Le mode headless conserve le rendu Firefox et les polices de Windows, mais
+les images représentent des états stabilisés : elles ne valident pas les
+flashs très brefs, le sélecteur de dossier natif ni une installation manuelle
+sur un bureau Windows 10/11. Les versions Firefox et geckodriver sont inscrites
+dans le rapport. Les tests d’installation existants ont leur propre job.

@@ -1884,7 +1884,7 @@ def test_english_ui_has_no_french_residue_in_real_browser():
     bootstrap = r'''window.__store = {uiLanguage:"en"};
 window.browser = {
   runtime: {
-    getManifest: () => ({version:"8.27"}),
+    getManifest: () => ({version:"8.28"}),
     sendNativeMessage: async (host,payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{
@@ -1905,7 +1905,7 @@ window.browser = {
       }};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
       if (action === "compatibility") return {ok:true,compatibility:{
-        compatible:true,frontend_version:"8.27",backend_version:"8.27",
+        compatible:true,frontend_version:"8.28",backend_version:"8.28",
         frontend_protocol:1,backend_protocol:1
       }};
       if (action === "diagnostics") return {
@@ -1939,7 +1939,7 @@ window.browser = {
           }
         },
         compatibility:{
-          compatible:true,frontend_version:"8.27",backend_version:"8.27",
+          compatible:true,frontend_version:"8.28",backend_version:"8.28",
           frontend_protocol:1,backend_protocol:1
         },
         updates_cached:null
@@ -2092,13 +2092,13 @@ def test_language_toggle_popup_in_real_browser():
     bootstrap = r'''window.__store = {};
 window.browser = {
   runtime: {
-    getManifest: () => ({version:"8.27"}),
+    getManifest: () => ({version:"8.28"}),
     sendNativeMessage: async (host,payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{active:null,queue:[],history:[],queue_paused:false}};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
-      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.27",backend_version:"8.27",frontend_protocol:1,backend_protocol:1}};
-      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.27",backend_version:"8.27"},updates_cached:null};
+      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.28",backend_version:"8.28",frontend_protocol:1,backend_protocol:1}};
+      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.28",backend_version:"8.28"},updates_cached:null};
       return {ok:true};
     },
     sendMessage: async message => message?.type === "kitty-get-output-dir" ? {ok:true,settings:{output_dir:"/tmp/kitty"}} : {ok:true}
@@ -2241,13 +2241,13 @@ def test_popup_ui_smoke_in_real_browser():
 
     bootstrap = r'''window.browser = {
   runtime: {
-    getManifest: () => ({version: "8.27"}),
+    getManifest: () => ({version: "8.28"}),
     sendNativeMessage: async (host, payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{active:null,queue:[],history:[],queue_paused:false}};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
-      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.27",backend_version:"8.27",frontend_protocol:1,backend_protocol:1}};
-      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.27",backend_version:"8.27"},updates_cached:null};
+      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.28",backend_version:"8.28",frontend_protocol:1,backend_protocol:1}};
+      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.28",backend_version:"8.28"},updates_cached:null};
       return {ok:true};
     },
     sendMessage: async message => {
@@ -2366,7 +2366,7 @@ let created = null;
 const sent = [];
 global.browser = {{
   runtime: {{
-    getManifest: () => ({{version:'8.27'}}),
+    getManifest: () => ({{version:'8.28'}}),
     sendNativeMessage: async (_host, payload) => {{
       sent.push(payload);
       if (payload.action === 'compatibility') return {{ok:true, compatibility:{{compatible:true}}}};
@@ -2427,12 +2427,12 @@ def test_github_release_check_and_sha256_download():
         asset_bytes = (b"KITTY-RELEASE-ZIP\n" * 257) + b"END"
         digest = hashlib.sha256(asset_bytes).hexdigest()
         release_payload = {
-            "tag_name": "v8.28",
-            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.28",
+            "tag_name": "v8.29",
+            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.29",
             "published_at": "2026-10-03T00:00:00Z",
             "assets": [{
-                "name": "kitty-download-manager-v8.28.zip",
-                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.28/kitty-download-manager-v8.28.zip",
+                "name": "kitty-download-manager-v8.29.zip",
+                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.29/kitty-download-manager-v8.29.zip",
                 "size": len(asset_bytes),
                 "digest": f"sha256:{digest}",
             }],
@@ -2461,8 +2461,8 @@ def test_github_release_check_and_sha256_download():
         host.urlopen = fake_urlopen
         report = host.check_kitty_release(save_cache=True)
         check(report.get("ok") is True, "check release GitHub simulé échoué")
-        check(report.get("update_available") is True, "release v8.28 non détectée")
-        equal(report.get("latest_version"), "8.28", "version release normalisée")
+        check(report.get("update_available") is True, "release v8.29 non détectée")
+        equal(report.get("latest_version"), "8.29", "version release normalisée")
         equal(report.get("asset_sha256"), digest, "digest GitHub non lu")
         check(report.get("download_supported") is True, "download devrait être autorisé avec SHA-256")
         check(host.KITTY_RELEASE_CACHE_FILE.is_file(), "cache release absent")
@@ -2471,7 +2471,7 @@ def test_github_release_check_and_sha256_download():
         check(result.get("ok") is True, f"download release simulé échoué: {result}")
         check(result.get("verified") is True, "SHA-256 non marqué vérifié")
         equal(result.get("sha256"), digest, "SHA-256 téléchargé incorrect")
-        target = home / "Downloads" / "kitty-download-manager-v8.28.zip"
+        target = home / "Downloads" / "kitty-download-manager-v8.29.zip"
         equal(target.read_bytes(), asset_bytes, "archive vérifiée non écrite dans Downloads")
 
 
@@ -2484,12 +2484,12 @@ def test_github_release_rejects_bad_sha256():
         asset_bytes = b"CORRUPTED-RELEASE"
         expected_digest = hashlib.sha256(b"EXPECTED-RELEASE").hexdigest()
         release_payload = {
-            "tag_name": "v8.28",
-            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.28",
+            "tag_name": "v8.29",
+            "html_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.29",
             "published_at": "2026-10-03T00:00:00Z",
             "assets": [{
-                "name": "kitty-download-manager-v8.28.zip",
-                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.28/kitty-download-manager-v8.28.zip",
+                "name": "kitty-download-manager-v8.29.zip",
+                "browser_download_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.29/kitty-download-manager-v8.29.zip",
                 "size": len(asset_bytes),
                 "digest": f"sha256:{expected_digest}",
             }],
@@ -2518,7 +2518,7 @@ def test_github_release_rejects_bad_sha256():
         check(result.get("ok") is False, "archive au mauvais SHA-256 acceptée")
         equal(result.get("code"), "kitty_update_integrity_failed", "code mauvais SHA-256")
         check(result.get("verified") is False, "mauvais SHA-256 marqué vérifié")
-        check(not (home / "Downloads" / "kitty-download-manager-v8.28.zip").exists(), "archive corrompue conservée")
+        check(not (home / "Downloads" / "kitty-download-manager-v8.29.zip").exists(), "archive corrompue conservée")
 
 
 
@@ -2543,7 +2543,7 @@ def test_safe_updater_preserves_user_state():
         install_dir = home / ".local" / "lib" / "kitty-download-manager"
         host_path = install_dir / "host.py"
         host_path.write_text(
-            host_path.read_text(encoding="utf-8").replace('APP_VERSION = "8.27"', 'APP_VERSION = "8.14"', 1),
+            host_path.read_text(encoding="utf-8").replace('APP_VERSION = "8.28"', 'APP_VERSION = "8.14"', 1),
             encoding="utf-8",
         )
 
@@ -2575,8 +2575,8 @@ def test_safe_updater_preserves_user_state():
             check=False,
         )
         check(update.returncode == 0, f"update.sh échoué:\n{update.stdout}")
-        check("8.14 → 8.27" in update.stdout, "résumé version updater absent")
-        check('APP_VERSION = "8.27"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
+        check("8.14 → 8.28" in update.stdout, "résumé version updater absent")
+        check('APP_VERSION = "8.28"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
         equal(json.loads(settings.read_text(encoding="utf-8"))["output_dir"], "/tmp/kitty-custom", "settings perdus")
         equal((auth / "cookies.txt").read_text(encoding="utf-8"), "COOKIE-SENTINEL", "cookies perdus")
         state = json.loads(queue.read_text(encoding="utf-8"))
@@ -2763,7 +2763,7 @@ def test_cache_cleanup_is_safe_and_reports_sizes():
         (cache / "worker.log.1").write_bytes(b"OLD-LOG-1")
         (cache / "worker.log.2").write_bytes(b"OLD-LOG-2")
 
-        client = {"version": "8.27", "protocol": 1}
+        client = {"version": "8.28", "protocol": 1}
         before = native_call(NATIVE / "host.py", home, {"action": "diagnostics", "client": client})
         check(before.get("ok") is True, "diagnostic cache avant nettoyage échoué")
         cache_before = before.get("system", {}).get("cache", {})

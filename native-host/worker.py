@@ -894,7 +894,7 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
 def main():
     global current_job_id
 
-    log(f"worker V8.27 lancé pid={os.getpid()} argv={sys.argv[1:]}")
+    log(f"worker V8.28 lancé pid={os.getpid()} argv={sys.argv[1:]}")
     if len(sys.argv) != 2:
         return 2
 
