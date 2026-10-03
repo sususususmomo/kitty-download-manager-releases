@@ -1,10 +1,10 @@
 # Kitty Download Manager — publication publique Mozilla
 
-L’extension Firefox v8.32 est le frontend. Les installateurs GitHub contiennent le backend v8.31, sans extension. Leurs versions peuvent évoluer séparément tant que le protocole natif reste compatible.
+L’extension Firefox v8.33 est le frontend. Les installateurs GitHub contiennent le backend v8.31, sans extension. Leurs versions peuvent évoluer séparément tant que le protocole natif reste compatible.
 
 ## Fichier à soumettre
 
-Utilise `kitty-download-manager-v8.32-unsigned.xpi`, et choisis **On this site** pour une fiche publique sur addons.mozilla.org. Ce fichier contient uniquement les fichiers de `extension/`, avec `manifest.json` à la racine. N’envoie pas l’archive complète de développement ni un installateur backend.
+Utilise `kitty-download-manager-v8.33-unsigned.xpi`, et choisis **On this site** pour une fiche publique sur addons.mozilla.org. Ce fichier contient uniquement les fichiers de `extension/`, avec `manifest.json` à la racine. N’envoie pas l’archive complète de développement ni un installateur backend.
 
 L’extension n’est pas encore signée ou publiée. Le dépôt du XPI et les renseignements de la fiche se font depuis le compte Mozilla du propriétaire. Aucun secret API n’est nécessaire pour un dépôt manuel. La signature et l’examen Mozilla interviennent après soumission.
 
@@ -30,7 +30,7 @@ To test: install the extension on Firefox 140 or later, open its toolbar popup, 
 
 The extension sends the URLs selected for downloads and requested download operations to this local native host. The host contacts the selected media websites to obtain metadata and download the media. The manifest declares required `websiteActivity` because Native Messaging transmission must be declared even when the receiver is local. Kitty does not send browsing history, analytics or telemetry to its developer. The separate privacy statement describes local history and optional YouTube sessions.
 
-Source JavaScript is human-readable and included directly in the XPI; there is no minification, transpilation or external build step. The complete source and tests are available on the `frontend-test-v8.32-20261003` branch of the linked GitHub repository. `python tools/build-packages.py` creates the frontend XPI and the three backend-only ZIPs. Test harness files are included only in temporary CI XPIs, not in the distributed XPI.
+Source JavaScript is human-readable and included directly in the XPI; there is no minification, transpilation or external build step. The complete source and tests are available on the `frontend-test-v8.33-20261003` branch of the linked GitHub repository. `python tools/build-packages.py` creates the frontend XPI and the three backend-only ZIPs. Test harness files are included only in temporary CI XPIs, not in the distributed XPI.
 
 ## Confidentialité et permissions
 
@@ -44,7 +44,7 @@ La validation automatique et les tests de Firefox facilitent l’examen mais ne 
 
 ## Résultat du validateur Mozilla
 
-`web-ext 10.6.0` : **0 erreur, 13 avertissements**. Le rapport complet est fourni dans `docs/amo-lint-v8.32.json`.
+`web-ext 10.6.0` : **0 erreur, 13 avertissements**. Le rapport complet est fourni dans `docs/amo-lint-v8.33.json`.
 
 Un avertissement concerne Firefox Android 140, où le champ de consentement est plus récent. Kitty cible Firefox sur ordinateur, puisque ses trois backends sont pour Linux, Windows et macOS. La soumission doit donc viser Firefox desktop, sans annoncer Android comme compatible.
 
