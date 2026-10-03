@@ -1,0 +1,13 @@
+Kitty Download Manager — validation des sources communes v8.31 sur Windows
+
+GitHub Actions : https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585157
+Commit testé : f05dea8d0ff9cba6587b51e28dd7d380378e2229
+Résultat : success
+
+- 32 tests portables et de vrais processus Windows réussis.
+- 4 tests d’installation, mise à jour, remux audio et désinstallation réussis.
+- Job des captures de la vraie popup Firefox réussi.
+- Régressions Linux : 94 réussies, 5 visuels Chromium ignorés.
+
+Cette vérification concerne les sources incluses dans le ZIP macOS v8.31.
+L’archive Windows livrée séparément reste la version v8.29.
