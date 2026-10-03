@@ -24,6 +24,7 @@ jobs:
       - name: Full online installation and Native Messaging launcher
         shell: powershell
         run: |
+          $env:KITTY_INSTALL_TRACEBACK='1'
           & .\Install.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:KITTY_INSTALLED_TEST='1'

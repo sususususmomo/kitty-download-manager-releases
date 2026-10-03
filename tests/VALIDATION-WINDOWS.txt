@@ -1,60 +1,69 @@
-Kitty Download Manager V8.26 — Windows x64, version de test
+Kitty Download Manager V8.27 — Windows x64, version de test
 
-Correction du contexte de lancement des tests Windows :
-- Les suites Windows préparent un Job intermédiaire avec BREAKAWAY_OK avant
-  de lancer des descendants. Le Job externe du runner reste propriétaire de
-  l'arbre des tests; les flags de production et les assertions sont conservés.
-- Les tests attendent la fin des workers avant d'effacer leurs dossiers.
-- Les erreurs du worker sont jointes aux assertions d'annulation et d'arrêt.
+Erreurs V8.26 traitées :
+- Le test du lanceur passait des guillemets doubles au sérialiseur C de Python.
+  CMD recevait des guillemets précédés de backslashes et refusait le batch.
+  Le test utilise maintenant le nom relatif fixe .\native-host.bat, avec le
+  dossier de travail passé séparément à CreateProcess.
+- La désinstallation supprimait deux fois une clé HKCU partagée entre les
+  vues 32/64 bits du registre. La seconde suppression levait FileNotFoundError.
+  Le cas a été reproduit dans un test portable avant correction. La clé déjà
+  absente est désormais acceptée; les autres erreurs restaurent le registre.
+- La collection foreach du script PowerShell de nettoyage est parenthésée.
+- Le test final attend la suppression effective des runtimes, du script de
+  nettoyage et de Uninstall.cmd.
+- Sorties CLI de l'installateur en UTF-8; traces complètes des erreurs en CI.
 
-Journal Windows V8.25 fourni par l'utilisateur (2026-10-03) :
-- 30 tests : 26 réussis, 2 simulations POSIX ignorées, 2 erreurs.
-- Les 2 erreurs sont des WinError 5 lors de CreateProcess, avant tout contrôle
-  d'annulation/arrêt. Le test de survie après fermeture du Job parent réussit.
-- Le test de survie utilisait déjà un Job intermédiaire autorisant breakaway.
-- L'installation complète n'a pas été atteinte par ce job GitHub Actions.
+Journal Windows V8.26 fourni par l'utilisateur (2026-10-03) :
+- L'étape d'installation complète a été atteinte après les tests de portage.
+- Python privé, yt-dlp, Mutagen, psutil et dépendances installés.
+- FFmpeg et Deno préparés et exécutables vérifiés.
+- Protocole natif direct et versions vérifiés; backend installé.
+- Le test de mise à jour a terminé la bascule puis échoué sur son appel batch.
+- Remux audio WebM vers Opus avec validation du fichier : réussi.
+- Tests du lanceur et du statut après mise à jour : refus CMD.
+- Test de désinstallation : WinError 2, 3 échecs sur 4 tests d'installation.
 
-Validation V8.26 locale, environnement Linux (2026-10-03) :
+Validation V8.27 locale sous Linux (2026-10-03) :
 - 94 régressions réussies, 0 échec, 5 vérifications visuelles ignorées.
-- 26 tests portables réussis; 4 tests Windows ignorés.
-- 4 tests d'installation Windows ignorés (exigent Windows et activation CI).
-- Les 2 simulations de contrôle coopératif utilisent de vrais processus Linux.
-- Structure YAML et archives ZIP/XPI vérifiées à l'assemblage.
+- 28 tests portables réussis, 4 tests exigeant Windows ignorés.
+- Parmi les 28 : contrôle coopératif dans de vrais processus Linux, registre
+  à vues partagées et séparées, maintien du rollback lors d'un refus d'accès.
+- 4 tests sur installation Windows complète ignorés localement.
+- Syntaxe Python, structure YAML et archives ZIP/XPI vérifiées.
 
-La V8.26 doit encore être exécutée sur le runner Windows. Ces résultats locaux
-ne valident pas les API Win32, PowerShell, l'installation ni Firefox Windows.
-L'extension XPI est non signée. Aucun téléchargement de vidéo réseau effectué.
+La V8.27 doit encore être exécutée sur le runner Windows. Les résultats locaux
+ne valident pas PowerShell, les API Win32 ni Firefox. Le XPI reste non signé.
+Aucun téléchargement de vidéo réseau n'a été fait pour ces tests.
 
-Le runtime Python privé reste épinglé à 3.13.16 avec SHA-256 officiel.
-
-Journal de régression V8.26 :
+Journal de régression V8.27 :
 
 Kitty Download Manager — tests de régression
 Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 
-✓ Stockage partagé : concurrence et interruptions (554 ms)
+✓ Stockage partagé : concurrence et interruptions (611 ms)
 ✓ Structure du paquet (0 ms)
 ✓ Contrat manifest Firefox (0 ms)
 ✓ Contrat Native Messaging (0 ms)
-✓ Syntaxe Python (38 ms)
+✓ Syntaxe Python (39 ms)
 ✓ Versions cohérentes (1 ms)
 ✓ Gardes de coût du resolver (1 ms)
-✓ Syntaxe JavaScript (338 ms)
-✓ Universal Media Resolver (58 ms)
-✓ Installation dans HOME isolé (265 ms)
+✓ Syntaxe JavaScript (314 ms)
+✓ Universal Media Resolver (53 ms)
+✓ Installation dans HOME isolé (227 ms)
 ✓ Compatibilité frontend/backend (2 ms)
-✓ Blocage mutations incompatibles (439 ms)
-✓ Updater sûr conserve état (536 ms)
-✓ Uninstaller safe + purge (593 ms)
-✓ Migration V7 → V8 complète (277 ms)
-✓ Migration conserve destination custom (239 ms)
+✓ Blocage mutations incompatibles (400 ms)
+✓ Updater sûr conserve état (523 ms)
+✓ Uninstaller safe + purge (557 ms)
+✓ Migration V7 → V8 complète (262 ms)
+✓ Migration conserve destination custom (242 ms)
 ✓ Migration bloque worker V7 actif (33 ms)
-✓ Identité runtime V8 propre (1 ms)
-✓ Protocole Native Messaging (1016 ms)
+✓ Identité runtime V8 propre (2 ms)
+✓ Protocole Native Messaging (1049 ms)
 ✓ Canonicalisation backend (22 ms)
 ✓ Migration + récupération queue.json (3 ms)
 ✓ Réglages + reset sûr (4 ms)
-✓ Sémantique de la file sans réseau (6 ms)
+✓ Sémantique de la file sans réseau (5 ms)
 ✓ Noms + nettoyage des fichiers (1 ms)
 ✓ Clic/drag des pills compactes (0 ms)
 ✓ Fond lisible du Chat ASCII (0 ms)
@@ -76,7 +85,7 @@ Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 ✓ Capsule source aplatie (0 ms)
 ✓ Toute la capsule ouvre la source (0 ms)
 ✓ Icônes sources + bouton cliquable (0 ms)
-✓ Détection visuelle des plateformes (51 ms)
+✓ Détection visuelle des plateformes (55 ms)
 ✓ SIGTERM externe gèle + requeue (2 ms)
 ✓ SIGTERM manuel respecte lane prioritaire (1 ms)
 ✓ Signal externe vs annulation Kitty (1 ms)
@@ -87,54 +96,54 @@ Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 ✓ Payload erreur stable + détail (0 ms)
 ✓ Contrat erreurs terminales worker (0 ms)
 ✓ UI messages d’erreur personnalisés (0 ms)
-✓ État structuré des dépendances (84 ms)
-✓ Dépendance requise absente (41 ms)
-✓ UI diagnostic système (1 ms)
+✓ État structuré des dépendances (87 ms)
+✓ Dépendance requise absente (42 ms)
+✓ UI diagnostic système (0 ms)
 ✓ Rapport mises à jour sans réseau (1 ms)
 ✓ Rotation bornée des logs (29 ms)
-✓ Nettoyage cache sûr (256 ms)
+✓ Nettoyage cache sûr (266 ms)
 ✓ UI maintenance cache (1 ms)
 ✓ i18n catalogue erreurs complet (2 ms)
 ✓ i18n popup statique couvert (5 ms)
 ↷ Audit English sans résidu français — Chromium indisponible
-✓ i18n sans changement des clés internes (1 ms)
+✓ i18n sans changement des clés internes (0 ms)
 ↷ Toggle FR/EN popup dans Chromium — Chromium indisponible
 ↷ Toggle FR/EN pill dans Chromium — Chromium indisponible
 ✓ Ordre init protocole popup (0 ms)
-✓ Démarrage popup avec chargements différés (70 ms)
+✓ Démarrage popup avec chargements différés (65 ms)
 ↷ Popup interactive dans Chromium — Chromium indisponible
-✓ UI compatibilité + updates (0 ms)
-✓ Clic droit Kitty en un clic (55 ms)
-✓ Release GitHub + SHA-256 (3 ms)
-✓ Rejet release SHA-256 invalide (1 ms)
+✓ UI compatibilité + updates (1 ms)
+✓ Clic droit Kitty en un clic (54 ms)
+✓ Release GitHub + SHA-256 (5 ms)
+✓ Rejet release SHA-256 invalide (2 ms)
 ✓ Diagnostic copié sans contenu job (0 ms)
 ✓ Supervision métadonnées (3 ms)
 ✓ Fallback UI métadonnées (0 ms)
 ✓ Collections refusent les pochettes (2 ms)
-✓ Validation média refuse les images (43 ms)
-✓ Sélection finale préfère le média (77 ms)
-✓ Manuels devant backlog playlist (FIFO) (66 ms)
+✓ Validation média refuse les images (48 ms)
+✓ Sélection finale préfère le média (87 ms)
+✓ Manuels devant backlog playlist (FIFO) (68 ms)
 ✓ Priorité respecte pause globale (2 ms)
 ✓ Réparation ancienne queue mixte (2 ms)
-✓ Contrat UI priorité de file (50 ms)
-✓ Vider la file préserve l’actif (11 ms)
+✓ Contrat UI priorité de file (53 ms)
+✓ Vider la file préserve l’actif (12 ms)
 ✓ Contrat UI Vider la file (0 ms)
-✓ Progression Playlist persistante (54 ms)
-✓ Contrat UI Playlist (1 ms)
+✓ Progression Playlist persistante (56 ms)
+✓ Contrat UI Playlist (0 ms)
 ✓ Canonicalisation URL Playlist (2 ms)
 ✓ Résolution entrées de collection (1 ms)
 ✓ Détection collections SoundCloud (1 ms)
 ✓ Isolation cookies YouTube collections (1 ms)
 ✓ Profil SoundCloud dans la file (2 ms)
 ✓ File Playlist sans réseau (3 ms)
-✓ Isolation session YouTube (9 ms)
+✓ Isolation session YouTube (10 ms)
 ✓ Fermeture Firefox + lock orphelin (4 ms)
-✓ Snapshot YouTube figé par job (2 ms)
+✓ Snapshot YouTube figé par job (1 ms)
 ✓ Historique + écritures atomiques (2 ms)
 
 Résultat : 94 OK, 0 échec(s), 5 ignoré(s)
 
-Tests portables V8.26 :
+Tests portables V8.27 :
 
 test_bad_hash_is_removed (__main__.InstallerTests.test_bad_hash_is_removed) ... ok
 test_download_verifies_size_and_sha256 (__main__.InstallerTests.test_download_verifies_size_and_sha256) ... ok
@@ -149,6 +158,8 @@ test_publish_uses_stable_manifest_and_private_runtime (__main__.InstallerTests.t
 test_real_concurrent_transactions_do_not_lose_updates (__main__.InstallerTests.test_real_concurrent_transactions_do_not_lose_updates) ... ok
 test_registry_failure_rolls_back_every_published_file (__main__.InstallerTests.test_registry_failure_rolls_back_every_published_file) ... ok
 test_truncated_or_oversized_download_is_removed (__main__.InstallerTests.test_truncated_or_oversized_download_is_removed) ... ok
+test_unregister_cleans_shared_and_separate_registry_views (__main__.InstallerTests.test_unregister_cleans_shared_and_separate_registry_views) ... ok
+test_unregister_permission_failure_still_rolls_back (__main__.InstallerTests.test_unregister_permission_failure_still_rolls_back) ... ok
 test_validation_after_move_fails_without_replacing_old_install (__main__.InstallerTests.test_validation_after_move_fails_without_replacing_old_install) ... ok
 test_windows_alive_never_uses_os_kill (__main__.InstallerTests.test_windows_alive_never_uses_os_kill) ... ok
 test_windows_folder_chooser_escapes_apostrophes_and_metacharacters (__main__.InstallerTests.test_windows_folder_chooser_escapes_apostrophes_and_metacharacters) ... ok
@@ -168,7 +179,7 @@ test_real_windows_stop_preserves_partial_and_requeues_job (__main__.WindowsProce
 test_windows_survival_after_parent_job_closes (__main__.WindowsProcessTests.test_windows_survival_after_parent_job_closes) ... skipped 'Exige un vrai Windows et psutil'
 
 ----------------------------------------------------------------------
-Ran 30 tests in 0.446s
+Ran 32 tests in 0.464s
 
 OK (skipped=4)
 

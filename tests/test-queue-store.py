@@ -276,7 +276,7 @@ class QueueStoreTests(unittest.TestCase):
         host.QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
         original = b'{"state_version":999,"queue":[]}'
         host.QUEUE_FILE.write_bytes(original)
-        payload = json.dumps({'action': 'status', 'client': {'version': '8.26', 'protocol': 1}}).encode()
+        payload = json.dumps({'action': 'status', 'client': {'version': '8.27', 'protocol': 1}}).encode()
         env = os.environ.copy()
         env['HOME'] = str(self.home)
         proc = subprocess.run([sys.executable, str(NATIVE/'host.py')], input=struct.pack('<I',len(payload))+payload,

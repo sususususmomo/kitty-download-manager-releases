@@ -10,6 +10,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
 import unittest
 import uuid
 
@@ -32,7 +33,10 @@ class InstalledWindowsTests(unittest.TestCase):
         root = windows_install.app_root()
         command = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
         payload = json.dumps({"action": action}).encode()
-        proc = subprocess.run([str(command), "/d", "/s", "/c", '""' + str(root / "native-host.bat") + '""'],
+        # cmd.exe parses its /c tail differently from the C-runtime argument
+        # quoting used by subprocess. Invoke a fixed relative name and give
+        # CreateProcess the working directory separately, even for &/%/spaces.
+        proc = subprocess.run([str(command), "/d", "/s", "/c", r".\native-host.bat"], cwd=str(root),
                               input=struct.pack("<I", len(payload)) + payload,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=40)
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -126,6 +130,12 @@ path.unlink()
         for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
             with self.assertRaises(FileNotFoundError):
                 winreg.OpenKey(winreg.HKEY_CURRENT_USER, windows_install.REG_NATIVE, 0, winreg.KEY_READ | view)
+        deadline = time.monotonic() + 30
+        cleanup_targets = [root / name for name in ("versions", "Uninstall.cmd", "cleanup-uninstall.ps1")]
+        while any(path.exists() for path in cleanup_targets) and time.monotonic() < deadline:
+            time.sleep(.1)
+        for path in cleanup_targets:
+            self.assertFalse(path.exists(), f"Le nettoyage differe n'a pas termine : {path.name}")
 
 
 if __name__ == "__main__":

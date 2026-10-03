@@ -47,7 +47,7 @@ class InstallerTests(unittest.TestCase):
     def stage(self):
         stage = self.root / ("stage-" + "a" * 32)
         (stage / "extension").mkdir(parents=True)
-        (stage / "extension/manifest.json").write_text('{"version":"8.26"}', encoding="utf-8")
+        (stage / "extension/manifest.json").write_text('{"version":"8.27"}', encoding="utf-8")
         return stage
 
     def old_install(self):
@@ -61,7 +61,7 @@ class InstallerTests(unittest.TestCase):
             path.write_bytes(b"conserver")
 
     def test_publish_uses_stable_manifest_and_private_runtime(self):
-        version = installer.commit_install(self.root, self.stage(), "8.26", register_host=False)
+        version = installer.commit_install(self.root, self.stage(), "8.27", register_host=False)
         manifest = json.loads((self.root / f"{installer.HOST_NAME}.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["allowed_extensions"], ["kitty-download-manager@local"])
         self.assertEqual(manifest["path"], str(self.root / "native-host.bat"))
@@ -81,7 +81,7 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "register", side_effect=OSError("registre inaccessible")), \
              patch.object(installer, "restore_registry") as restore:
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, self.stage(), "8.26")
+                installer.commit_install(self.root, self.stage(), "8.27")
             restore.assert_called_once_with(["snapshot"])
         for name, content in originals.items():
             self.assertEqual((self.root / name).read_bytes(), content)
@@ -89,10 +89,59 @@ class InstallerTests(unittest.TestCase):
         for name in ("config/settings.json", "cache/queue.json", "download/video.mp4"):
             self.assertEqual((self.root / name).read_bytes(), b"conserver")
 
+    def uninstall_registry(self, *, shared, failure=None):
+        values = {(installer.REG_NATIVE, 0x0100): {"": str(self.root / f"{installer.HOST_NAME}.json")},
+                  (installer.REG_UNINSTALL, 0x0100): {"InstallLocation": str(self.root)}}
+        if not shared:
+            values[(installer.REG_NATIVE, 0x0200)] = dict(values[(installer.REG_NATIVE, 0x0100)])
+        def identity(path, view):
+            if shared and path == installer.REG_NATIVE:
+                view = 0x0100
+            return path, view
+        @contextmanager
+        def open_key(hive, path, reserved, access):
+            key = identity(path, access & 0x0300)
+            if key not in values:
+                raise FileNotFoundError(2, "Cle absente", path)
+            yield key
+        def delete_key(hive, path, view):
+            if failure is not None and path == installer.REG_NATIVE and view == 0x0200:
+                raise failure
+            key = identity(path, view)
+            if key not in values:
+                raise FileNotFoundError(2, "Cle absente", path)
+            del values[key]
+        api = SimpleNamespace(HKEY_CURRENT_USER=object(), KEY_READ=1,
+                              KEY_WOW64_64KEY=0x0100, KEY_WOW64_32KEY=0x0200,
+                              OpenKey=open_key, QueryValueEx=lambda key, name: (values[key][name], 1),
+                              DeleteKeyEx=delete_key)
+        return api, values
+
+    def test_unregister_cleans_shared_and_separate_registry_views(self):
+        for shared in (True, False):
+            with self.subTest(shared=shared):
+                api, values = self.uninstall_registry(shared=shared)
+                with patch.dict(sys.modules, {"winreg": api}), \
+                     patch.object(installer, "snapshot_registry", return_value=["original"]), \
+                     patch.object(installer, "restore_registry") as restore:
+                    installer.unregister(self.root)
+                    restore.assert_not_called()
+                self.assertEqual(values, {})
+
+    def test_unregister_permission_failure_still_rolls_back(self):
+        api, values = self.uninstall_registry(shared=False, failure=PermissionError(13, "Refuse"))
+        with patch.dict(sys.modules, {"winreg": api}), \
+             patch.object(installer, "snapshot_registry", return_value=["original"]), \
+             patch.object(installer, "restore_registry") as restore:
+            with self.assertRaises(PermissionError):
+                installer.unregister(self.root)
+            restore.assert_called_once_with(["original"])
+        self.assertIn((installer.REG_UNINSTALL, 0x0100), values)
+
     def test_validation_after_move_fails_without_replacing_old_install(self):
         self.old_install()
         with self.assertRaises(RuntimeError):
-            installer.commit_install(self.root, self.stage(), "8.26", register_host=False,
+            installer.commit_install(self.root, self.stage(), "8.27", register_host=False,
                                      validate=lambda _path: (_ for _ in ()).throw(RuntimeError("backend casse")))
         self.assertEqual((self.root / "extension/manifest.json").read_text(), "ancien")
         self.assertEqual((self.root / "current.json").read_bytes(), b"ancien:current.json")
@@ -105,12 +154,12 @@ class InstallerTests(unittest.TestCase):
             raise OSError("disque plein")
         with patch.object(installer.shutil, "copytree", side_effect=broken_copy):
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, stage, "8.26", register_host=False)
+                installer.commit_install(self.root, stage, "8.27", register_host=False)
         self.assertFalse((self.root / "extension").exists())
         self.assertFalse((self.root / "current.json").exists())
 
     def test_paths_in_metadata_cannot_escape_runtime_versions(self):
-        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.26", "versions/8.26-" + "x" * 32):
+        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.27", "versions/8.27-" + "x" * 32):
             with self.subTest(path=path), self.assertRaises(RuntimeError):
                 installer.checked_version_path(self.root, {"directory": path})
 
@@ -291,9 +340,9 @@ class InstallerTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("windows_asset_test", NATIVE / "host.py")
         host = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(host)
-        version = "8.27"
+        version = "8.28"
         linux = {"name": f"kitty-download-manager-v{version}.zip", "digest": "sha256:" + "a" * 64,
-                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.27/file.zip"}
+                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.28/file.zip"}
         windows = dict(linux, name=f"kitty-download-manager-v{version}-windows-x64.zip")
         payload = {"tag_name": "v" + version, "assets": [linux, windows]}
         with patch.object(host, "WINDOWS", True), patch.object(host, "urlopen", return_value=io.BytesIO(json.dumps(payload).encode())):

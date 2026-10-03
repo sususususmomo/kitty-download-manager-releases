@@ -69,7 +69,7 @@ def verified_download(url, destination, digest, expected_size=None):
     total = 0
     hasher = hashlib.sha256()
     try:
-        request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.26"})
+        request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.27"})
         with urlopen(request, timeout=90) as response, destination.open("xb") as out:
             while True:
                 block = response.read(256 * 1024)
@@ -109,7 +109,7 @@ def safe_extract(archive, destination):
 
 def github_binary(repo, asset_name, stage, executable_names):
     url = f"https://api.github.com/repos/{repo}/releases/latest"
-    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.26",
+    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.27",
                                    "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
         release = json.loads(response.read(4_000_000))
@@ -422,7 +422,13 @@ def unregister(root):
     saved = snapshot_registry()
     try:
         for path, view in keys:
-            winreg.DeleteKeyEx(winreg.HKEY_CURRENT_USER, path, view)
+            try:
+                winreg.DeleteKeyEx(winreg.HKEY_CURRENT_USER, path, view)
+            except FileNotFoundError:
+                # HKCU\Software\Mozilla is shared across WOW64 views. The
+                # first deletion can therefore remove the second logical
+                # view too. Missing is success; other errors still roll back.
+                pass
     except Exception:
         restore_registry(saved)
         raise
@@ -462,7 +468,7 @@ try {
   if (Test-Path -LiteralPath $path) {
    if ((Get-Item -LiteralPath $path).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Lien refuse.' }
    if ($name -eq 'versions') {
-    foreach ($item in Get-ChildItem -LiteralPath $path -Recurse -Force) {
+    foreach ($item in (Get-ChildItem -LiteralPath $path -Recurse -Force)) {
      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Lien interne refuse.' }
     }
    }
@@ -495,8 +501,15 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        # Match the UTF-8 console decoding configured by Install.ps1.
+        for stream in (sys.stdout, sys.stderr):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         main()
     except Exception as exc:
+        if os.environ.get("KITTY_INSTALL_TRACEBACK") == "1":
+            import traceback
+            traceback.print_exc()
         print(f"ERREUR : {exc}", file=sys.stderr)
         raise SystemExit(1)
