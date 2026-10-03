@@ -1,0 +1,20 @@
+name: Kitty backend downloads
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'frontend-test-*'
+    paths:
+      - '.github/workflows/backend-downloads.yml'
+      - 'tests/check-backend-downloads.py'
+      - 'tests/backend-download-checksums.json'
+jobs:
+  public-downloads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python tests/check-backend-downloads.py
