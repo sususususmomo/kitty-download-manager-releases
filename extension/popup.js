@@ -119,6 +119,8 @@ uiLanguageEl?.addEventListener("change", async () => {
   try {
     await browser.storage.local.set({ uiLanguage: language });
     I18N.apply(document.body);
+    renderBackendConnection();
+    prepareBackendInstaller();
     render(latestState);
     resetDownloadButton();
     updatePlaylistUrlStatus();
@@ -522,6 +524,88 @@ let latestState = { active: null, queue: [], history: [] };
 let pendingDuplicate = null;
 let popupPollTimer = 0;
 let popupInitialized = false;
+let backendConnection = {kind: "checking", version: ""};
+let backendInstaller = null;
+const backendControlIds = ["download", "openFolder", "cancel", "pauseQueue", "clearQueue", "clearHistory", "chooseDestination", "openLogs", "refreshDiagnostics", "runDiagnostics", "checkUpdates", "downloadKittyUpdate", "cleanCache", "resetKitty", "youtubeAuthConfigure", "youtubeAuthDelete", "youtubeAuthEnabled"];
+
+function setBackendConnection(kind, version = "") {
+  backendConnection = {kind, version};
+  if (kind !== "ready") nativeCompatibilityCache = null;
+  renderBackendConnection();
+}
+
+function renderBackendConnection() {
+  const {kind, version} = backendConnection;
+  const ready = kind === "ready";
+  const connection = document.getElementById("backendConnection");
+  const labels = {
+    checking: "Vérification de la connexion…",
+    ready: "Backend connecté",
+    missing: "Backend non installé",
+    unavailable: "Connexion au backend impossible",
+    incompatible: "Backend à mettre à jour"
+  };
+  connection.dataset.state = kind;
+  connection.textContent = I18N.tr(labels[kind]) + (version ? ` · v${version}` : "");
+  const notice = document.getElementById("backendNotice");
+  notice.hidden = ready || kind === "checking";
+  document.getElementById("backendNoticeTitle").textContent = I18N.tr(
+    kind === "missing" ? "Installer le backend Kitty" : labels[kind]
+  );
+  document.getElementById("backendNoticeText").textContent = I18N.tr(
+    kind === "missing" ? "Le backend est nécessaire pour télécharger tes médias."
+    : "Ouvre les réglages pour installer le backend ou vérifier la connexion."
+  );
+  // Restore only controls disabled by this connection gate. Renderers keep
+  // ownership of empty queues, running jobs and in-flight action states.
+  for (const id of backendControlIds) {
+    const control = document.getElementById(id);
+    if (!control) continue;
+    if (!ready) {
+      if (!control.hasAttribute("data-backend-disabled")) {
+        control.dataset.backendDisabled = String(control.disabled);
+      }
+      control.disabled = true;
+    } else if (control.hasAttribute("data-backend-disabled")) {
+      control.disabled = control.dataset.backendDisabled === "true";
+      delete control.dataset.backendDisabled;
+    }
+  }
+}
+
+async function prepareBackendInstaller() {
+  const link = document.getElementById("downloadBackend");
+  try { backendInstaller = KittyBackend.selectInstaller(await browser.runtime.getPlatformInfo()); }
+  catch { backendInstaller = null; }
+  link.hidden = !backendInstaller;
+  if (backendInstaller) link.href = backendInstaller.url;
+  else link.removeAttribute("href");
+  document.getElementById("backendPlatform").textContent = backendInstaller?.label ||
+    I18N.tr("Aucun installateur disponible pour ce système.");
+  document.getElementById("backendInstallInstruction").textContent = backendInstaller
+    ? I18N.tr(backendInstaller.instruction) : "";
+}
+
+document.getElementById("configureBackend").addEventListener("click", () => {
+  showSettings();
+  document.getElementById("backendSettings").scrollIntoView({block: "start"});
+});
+document.getElementById("verifyBackend").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  nativeCompatibilityCache = null;
+  nativeCompatibilityPromise = null;
+  setBackendConnection("checking");
+  try {
+    const state = await refresh(false, 5000);
+    if (backendConnection.kind === "ready") {
+      restoreDestination();
+      restoreYoutubeAuth();
+      restoreDiagnostics(false);
+    }
+    schedulePopupPoll(state?.active ? 750 : 1800);
+  } finally { button.disabled = false; }
+});
 let lastObservedHistoryId = undefined;
 let queueOutcomeTimer = 0;
 
@@ -1166,7 +1250,11 @@ function render(state) {
 async function refresh(force = false, timeoutMs = 0) {
   let timeout = 0;
   try {
-    const request = nativeMessage({ action: "status" });
+    const request = (async () => {
+      const response = await nativeMessage({ action: "status" });
+      if (response?.ok) response.kittyCompatibility = await ensureNativeCompatibility();
+      return response;
+    })();
     const r = timeoutMs > 0
       ? await Promise.race([
           request,
@@ -1178,10 +1266,17 @@ async function refresh(force = false, timeoutMs = 0) {
         ])
       : await request;
     if (!r?.ok) throw new Error(backendErrorMessage(r, "Erreur du host."));
+    setBackendConnection(r.kittyCompatibility?.compatible ? "ready" : "incompatible",
+      r.kittyCompatibility?.backend_version || "");
     render(r.state || {});
+    if (backendConnection.kind !== "ready") renderBackendConnection();
     return r.state || {};
   } catch (err) {
-    statusEl.textContent = "Erreur : " + err.message;
+    const kind = KittyBackend.connectionFailure(err);
+    setBackendConnection(kind);
+    statusEl.textContent = I18N.tr(kind === "missing"
+      ? "Installe le backend depuis les réglages pour commencer."
+      : "Le backend Kitty ne répond pas. Vérifie la connexion dans les réglages.");
     return null;
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -1304,6 +1399,8 @@ function setSettingsStatus(message = "", kind = "") {
 }
 
 function showSettings() {
+  renderBackendConnection();
+  prepareBackendInstaller();
   mainViewEl.classList.add("hidden");
   settingsViewEl.classList.remove("hidden");
   restoreSettingsSectionStates();
@@ -2433,6 +2530,7 @@ async function submitPlaylistDownload() {
     statusEl.textContent = "Erreur collection : " + err.message;
   } finally {
     downloadBtn.disabled = false;
+    renderBackendConnection();
     resetDownloadButton();
   }
 }
@@ -2593,8 +2691,8 @@ function schedulePopupPoll(delay) {
   clearPopupPoll();
   popupPollTimer = setTimeout(async () => {
     popupPollTimer = 0;
-    const state = await refresh();
-    schedulePopupPoll(state?.active ? 750 : 1800);
+    const state = await refresh(false, 5000);
+    schedulePopupPoll(state?.active ? 750 : (backendConnection.kind === "ready" ? 1800 : 5000));
   }, delay);
 }
 
@@ -2618,6 +2716,7 @@ document.addEventListener("visibilitychange", () => {
 
 async function initializePopup() {
   let state = null;
+  renderBackendConnection();
   try {
     // One startup owner. All visible preferences and the first fresh backend
     // render finish before the placeholder markup becomes visible.
@@ -2628,6 +2727,7 @@ async function initializePopup() {
       restoreSettingsSectionStates(),
       restorePillSettings(),
       restoreModeSelection(),
+      prepareBackendInstaller(),
       refresh(false, 5000)
     ]);
     const firstStatus = results[results.length - 1];

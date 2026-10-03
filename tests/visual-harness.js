@@ -40,6 +40,12 @@ function popupState() {
         detail: item.querySelector(".dependencyValue")?.title || "" })),
     destination: text("destinationPath"),
     language: doc.getElementById("uiLanguage").value,
+    backendState: doc.getElementById("backendConnection")?.dataset.state,
+    backendText: text("backendConnection"),
+    backendNotice: !doc.getElementById("backendNotice")?.hidden,
+    backendDownload: doc.getElementById("downloadBackend")?.href,
+    backendDownloadVisible: !doc.getElementById("downloadBackend")?.hidden,
+    downloadEnabled: !doc.getElementById("download").disabled,
     sections: Object.fromEntries([...doc.querySelectorAll(".collapseSection")]
       .map(section => [section.dataset.section, !section.classList.contains("collapsed")])),
     settingsSections: Object.fromEntries([...doc.querySelectorAll(".settingsCollapse")]
@@ -72,6 +78,13 @@ async function command(request) {
         action: "diagnostics",
         client: { version: browser.runtime.getManifest().version, protocol: 1 },
       });
+    case "language": {
+      const view = popupView();
+      const select = view.document.getElementById("uiLanguage");
+      select.value = request.language;
+      select.dispatchEvent(new view.Event("change", {bubbles:true}));
+      return popupState();
+    }
     case "click": {
       const button = popupView()?.document.querySelector(request.selector);
       if (!button || button.disabled) throw new Error(`Bouton indisponible : ${request.selector}`);

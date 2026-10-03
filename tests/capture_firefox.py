@@ -155,7 +155,7 @@ def run():
     import platform_support
     import queue_store
     import installer_support
-    from app_paths import macos_root, windows_root
+    from app_paths import macos_root, windows_root, native_manifest_path
     from selenium import webdriver
     from selenium.webdriver.firefox.options import Options
     from selenium.webdriver.firefox.service import Service
@@ -172,6 +172,7 @@ def run():
     queue_file = root / "cache/queue.json"
     lock_file = root / "cache/queue.lock"
     seeded = False
+    manifest_backup = None
     try:
         current = installer_support.current_install(root)
         if not current:
@@ -317,6 +318,33 @@ def run():
         command("scroll", selector='[data-settings-section="dependencies"]')
         capture("07-dependances", "Réglages — dépendances du backend")
         validate_capture_diagnostics(report["diagnostics"])
+        # Exercise the real Firefox extension without its native host, then
+        # restore registration and retry without reloading the extension.
+        command("close")
+        wait_state(lambda state: not state.get("open"))
+        manifest = native_manifest_path()
+        manifest_backup = manifest.with_name(manifest.name + ".bootstrap-test")
+        manifest.rename(manifest_backup)
+        command("open")
+        wait_state(lambda state: state.get("ready") and state.get("backendState") in ("missing", "unavailable")
+                   and state.get("backendNotice") and not state.get("downloadEnabled"), label="Kitty sans backend")
+        capture("08-sans-backend", "Première utilisation — backend indisponible")
+        command("click", selector="#configureBackend")
+        missing = wait_state(lambda state: state.get("settings") and state.get("backendDownloadVisible"))
+        suffix = "macos.zip" if sys.platform == "darwin" else "windows-x64.zip"
+        if not missing.get("backendDownload", "").endswith(suffix):
+            raise RuntimeError(f"Mauvais installateur GitHub : {missing}")
+        command("scroll", bottom=False)
+        capture("09-installation-backend", "Réglages — téléchargement du backend sans moteur installé")
+        command("language", language="en")
+        wait_state(lambda state: state.get("language") == "en" and state.get("backendText", "").startswith(("Backend not installed", "Cannot connect")))
+        capture("10-installation-english", "Backend setup — English")
+        manifest_backup.rename(manifest)
+        manifest_backup = None
+        command("click", selector="#verifyBackend")
+        wait_state(lambda state: state.get("backendState") == "ready" and state.get("downloadEnabled"), label="connexion rétablie sans recharger l’extension")
+        capture("11-backend-connecte", "Backend installé — connexion rétablie")
+        report["bootstrap"] = {"without_native": "ok", "platform_download": "ok", "english": "ok", "reconnection": "ok"}
         report["status"] = "réussi"
     except Exception:
         report["status"] = "échec"
@@ -332,6 +360,8 @@ def run():
             except Exception:
                 pass
     finally:
+        if manifest_backup and manifest_backup.exists():
+            manifest_backup.rename(native_manifest_path())
         if driver:
             try:
                 driver.quit()

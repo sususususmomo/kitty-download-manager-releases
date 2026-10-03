@@ -21,7 +21,7 @@ NATIVE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(NATIVE_DIR))
 from installer_support import (check_private_path, atomic_bytes, atomic_json, verified_download,
                                safe_extract, native_query, checked_version_path, current_install,
-                               paused_maintenance)
+                               paused_maintenance, source_backend_version)
 
 BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "errors.py", "app_paths.py",
                  "compatibility.py", "runtime_storage.py", "queue_store.py", "platform_support.py",
@@ -151,12 +151,13 @@ def commit_install(root, stage, version, *, register_host=True, validate=None):
                       'exit /b %errorlevel%\r\n')
         manifest = {"name": HOST_NAME, "description": "Kitty Download Manager Windows",
                     "path": str(root / "native-host.bat"), "type": "stdio", "allowed_extensions": [EXTENSION_ID]}
-        if extension.exists():
-            check_private_path(extension)
-            os.replace(extension, old_extension)
-            moved_extension = True
-        published_extension = True
-        shutil.copytree(version_dir / "extension", extension)
+        if (version_dir / "extension").is_dir():
+            if extension.exists():
+                check_private_path(extension)
+                os.replace(extension, old_extension)
+                moved_extension = True
+            published_extension = True
+            shutil.copytree(version_dir / "extension", extension)
         atomic_bytes(root / "native-host.bat", launcher.encode("utf-8"))
         atomic_json(root / f"{HOST_NAME}.json", manifest)
         atomic_bytes(root / "Uninstall.cmd", uninstaller.encode("utf-8"))
@@ -188,8 +189,7 @@ def install(args):
     source, stage = Path(args.source).resolve(), check_private_path(Path(args.stage).resolve())
     if stage.parent != root or not re.fullmatch(r"stage-[0-9a-f]{32}", stage.name):
         raise RuntimeError("Dossier de preparation inattendu.")
-    manifest = json.loads((source / "extension/manifest.json").read_text(encoding="utf-8"))
-    version = str(manifest["version"])
+    version = source_backend_version(source)
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
         raise RuntimeError("Version invalide.")
     backend = stage / "backend"
@@ -198,7 +198,8 @@ def install(args):
         origin = source / "native-host" / filename
         compile(origin.read_text(encoding="utf-8"), str(origin), "exec")
         shutil.copy2(origin, backend / filename)
-    shutil.copytree(source / "extension", stage / "extension")
+    if (source / "extension").is_dir():
+        shutil.copytree(source / "extension", stage / "extension")
     shutil.copy2(source / "THIRD-PARTY-NOTICES.md", stage / "THIRD-PARTY-NOTICES.md")
     if not args.no_dependencies:
         print("Preparation de FFmpeg et Deno...", flush=True)

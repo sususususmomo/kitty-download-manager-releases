@@ -80,9 +80,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Installation Kitty interrompue; consulter le message ci-dessus.' }
     Write-Host ''
     Write-Host 'Installation terminee. Dossier :' $appRoot
-    Write-Host 'Firefox : about:debugging > Ce Firefox > Charger un module temporaire.'
-    Write-Host 'Selectionner :' (Join-Path $appRoot 'extension\manifest.json')
-    Write-Host 'Le XPI fourni doit etre signe par Mozilla pour une installation permanente.'
+    Write-Host 'Rouvre Kitty dans Firefox et clique sur Verifier la connexion dans les reglages.'
     exit 0
 } catch {
     Write-Host ('ERREUR : ' + $_.Exception.Message) -ForegroundColor Red

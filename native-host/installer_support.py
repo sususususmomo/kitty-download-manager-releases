@@ -20,6 +20,20 @@ import zipfile
 APP_ID = "KittyDownloadManager"
 MAX_DOWNLOAD = 350 * 1024 * 1024
 
+def source_backend_version(source):
+    """Backend-only archives carry their own version, independent of Firefox."""
+    source = Path(source)
+    metadata = source / "backend.json"
+    origin = metadata if metadata.exists() else source / "extension/manifest.json"
+    info = json.loads(origin.read_text(encoding="utf-8"))
+    version = str(info.get("version", ""))
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
+        raise RuntimeError("Version backend invalide.")
+    if metadata.exists() and info.get("protocol") != 1:
+        raise RuntimeError("Protocole backend invalide.")
+    return version
+
+
 def check_private_path(path):
     path = Path(path)
     for part in (path, *path.parents):

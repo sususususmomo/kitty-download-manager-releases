@@ -165,7 +165,4 @@ else
 fi
 
 echo
-echo "Important V8 : l'identifiant Firefox a changé."
-echo "Dans about:debugging → Ce Firefox, charge extension/manifest.json de V8."
-echo "Si l'ancienne V7 temporaire est encore affichée, supprime-la."
-echo "Recharge ensuite les pages ouvertes pour mettre à jour la pill."
+echo "Rouvre Kitty dans Firefox et clique sur Vérifier la connexion dans les réglages."

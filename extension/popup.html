@@ -1451,6 +1451,16 @@
     }
     #settingsStatus.success { color: var(--kitty-success); opacity: .92; }
     #settingsStatus.error { color: var(--kitty-error); opacity: .95; }
+    #backendNotice[hidden], .backendDownload[hidden] { display: none; }
+    #backendNotice { border-color: rgba(74,163,223,.35); }
+    .backendButtons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+    .backendButtons > * { flex: 1; text-align: center; font-size: 11px; }
+    .backendDownload { display: inline-flex; align-items: center; justify-content: center;
+      padding: 8px 10px; border: 1px solid var(--kitty-blue); border-radius: 8px;
+      background: var(--kitty-blue); color: white; text-decoration: none; font-weight: 650; }
+    .backendDownload:hover { background: var(--kitty-blue-hover); }
+    #backendConnection[data-state="ready"] { color: var(--kitty-success); }
+    #backendConnection[data-state="incompatible"] { color: var(--kitty-error); }
     .settingsFooter {
       margin-top: 10px;
       text-align: center;
@@ -1520,6 +1530,12 @@
     <div id="playlistUrlStatus" class="playlistUrlStatus">
       YouTube, SoundCloud, Bandcamp, Vimeo, Dailymotion…
     </div>
+  </div>
+
+  <div id="backendNotice" class="card" role="status" hidden>
+    <div class="settingsRowLabel" id="backendNoticeTitle">Installer le backend Kitty</div>
+    <p class="settingsHint" id="backendNoticeText">Le backend est nécessaire pour télécharger tes médias.</p>
+    <button id="configureBackend" class="ghost" type="button">Configurer Kitty</button>
   </div>
 
   <div class="toprow">
@@ -1613,6 +1629,19 @@
           <option value="en">English</option>
         </select>
       </div>
+    </div>
+
+    <div class="settingsGroup" id="backendSettings">
+      <div class="settingsGroupTitle">Backend Kitty</div>
+      <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
+      <div id="backendPlatform" class="settingsRowSub"></div>
+      <div class="settingsHint">Le backend s’installe sur ton ordinateur et effectue les téléchargements.</div>
+      <div class="backendButtons">
+        <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger</a>
+        <button id="verifyBackend" class="ghost" type="button">Vérifier la connexion</button>
+      </div>
+      <div id="backendInstallInstruction" class="settingsHint"></div>
+      <div class="settingsHint">Après l’installation, rouvre Kitty ou clique sur Vérifier la connexion.</div>
     </div>
 
     <div class="settingsGroup">
@@ -1784,11 +1813,12 @@
     </div>
 
     <div id="settingsStatus" role="status" aria-live="polite"></div>
-    <div class="settingsFooter">Kitty Download Manager · v8.31</div>
+    <div class="settingsFooter">Kitty Download Manager · v8.32</div>
   </div>
 
   <script src="i18n.js"></script>
   <script src="shared.js"></script>
+  <script src="backend-installer.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -186,7 +186,7 @@ def test_python_syntax():
 
 
 def test_version_consistency():
-    version = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))["version"]
+    version = json.loads((ROOT / "backend.json").read_text(encoding="utf-8"))["version"]
     host = (NATIVE / "host.py").read_text(encoding="utf-8")
     worker = (NATIVE / "worker.py").read_text(encoding="utf-8")
     installer = (ROOT / "install.sh").read_text(encoding="utf-8")
@@ -243,7 +243,7 @@ def test_installer_sandbox():
         )
         check(proc.returncode == 0, f"install.sh a échoué:\n{proc.stdout}")
 
-        version = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))["version"]
+        version = json.loads((ROOT / "backend.json").read_text(encoding="utf-8"))["version"]
         check(f"V{version} installée." in proc.stdout, "install.sh affiche une ancienne version")
 
         install_dir = home / ".local" / "lib" / "kitty-download-manager"
@@ -586,7 +586,7 @@ def test_native_protocol():
 
         diag = native_call(installed_host, home, {"action": "diagnostics"})
         check(diag.get("ok") is True, "diagnostics")
-        version = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))["version"]
+        version = json.loads((ROOT / "backend.json").read_text(encoding="utf-8"))["version"]
         equal(diag["diagnostics"]["kitty_version"], version, "version diagnostic")
         check(isinstance(diag.get("dependencies", {}).get("items"), list), "dépendances diagnostic Native Messaging")
         equal(diag.get("privacy", {}).get("network_used"), False, "diagnostic Native Messaging sans réseau")
@@ -1992,6 +1992,7 @@ window.browser = {
             page.add_script_tag(content=bootstrap)
             page.add_script_tag(content=i18n)
             page.add_script_tag(content=shared)
+            page.add_script_tag(content=(EXT / "backend-installer.js").read_text(encoding="utf-8"))
             page.add_script_tag(content=popup)
             page.wait_for_timeout(250)
 
@@ -2129,6 +2130,7 @@ window.browser = {
             page.add_script_tag(content=bootstrap)
             page.add_script_tag(content=i18n)
             page.add_script_tag(content=shared)
+            page.add_script_tag(content=(EXT / "backend-installer.js").read_text(encoding="utf-8"))
             page.add_script_tag(content=popup)
             page.wait_for_timeout(160)
 
@@ -2278,6 +2280,7 @@ def test_popup_ui_smoke_in_real_browser():
             page.add_script_tag(content=bootstrap)
             page.add_script_tag(content=i18n)
             page.add_script_tag(content=shared)
+            page.add_script_tag(content=(EXT / "backend-installer.js").read_text(encoding="utf-8"))
             page.add_script_tag(content=popup)
             page.wait_for_timeout(120)
 

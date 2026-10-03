@@ -212,7 +212,9 @@ def _load_module(path: Path, name: str):
 
 def _source_release_info(source: Path) -> dict:
     source = source.resolve()
-    manifest = _read_json(source / "extension" / "manifest.json")
+    metadata_path = source / "backend.json"
+    backend_only = metadata_path.exists()
+    manifest = _read_json(metadata_path if backend_only else source / "extension" / "manifest.json")
     if not isinstance(manifest, dict):
         raise RuntimeError("manifest.json de la release introuvable/invalide.")
 
@@ -232,11 +234,14 @@ def _source_release_info(source: Path) -> dict:
     )
     backend_protocol = int(getattr(compat, "NATIVE_PROTOCOL_VERSION", -1))
 
-    shared = (source / "extension" / "shared.js").read_text(encoding="utf-8")
-    match = re.search(r"const\s+NATIVE_PROTOCOL_VERSION\s*=\s*(\d+)\s*;", shared)
-    if not match:
-        raise RuntimeError("Protocole frontend absent de shared.js.")
-    frontend_protocol = int(match.group(1))
+    if backend_only:
+        frontend_protocol = manifest.get("protocol")
+    else:
+        shared = (source / "extension" / "shared.js").read_text(encoding="utf-8")
+        match = re.search(r"const\s+NATIVE_PROTOCOL_VERSION\s*=\s*(\d+)\s*;", shared)
+        if not match:
+            raise RuntimeError("Protocole frontend absent de shared.js.")
+        frontend_protocol = int(match.group(1))
     if frontend_protocol != backend_protocol:
         raise RuntimeError(
             f"Release incohérente: protocole frontend {frontend_protocol} / backend {backend_protocol}."
@@ -478,7 +483,7 @@ def update(source: Path, allow_downgrade=False, skip_network=False) -> int:
     print(f"✓ Backend Kitty {installed_version} → {version} mis à jour")
     print("✓ configuration, historique, file et cookies conservés")
     print("✓ sauvegarde backend créée dans ~/.cache/kitty-download-manager/update-backups")
-    print("→ Recharge l’extension Firefox pour aligner le frontend sur cette release.")
+    print("→ Rouvre Kitty puis vérifie la connexion dans ses réglages.")
     return 0
 
 

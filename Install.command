@@ -73,6 +73,4 @@ echo 'Installation de yt-dlp, Mutagen et du support des processus…'
     --source "$kitty_source" --stage "$kitty_stage" --arch "$kitty_arch"
 echo
 echo "Installation terminée : $kitty_root"
-echo 'Firefox : about:debugging > Ce Firefox > Charger un module temporaire.'
-echo "Sélectionne : $kitty_root/extension/manifest.json"
-echo 'Le XPI doit être signé par Mozilla pour une installation permanente.'
+echo 'Rouvre Kitty dans Firefox et clique sur Vérifier la connexion dans les réglages.'

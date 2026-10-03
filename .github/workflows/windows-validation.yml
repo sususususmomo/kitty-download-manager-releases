@@ -25,7 +25,7 @@ jobs:
         shell: powershell
         run: |
           $env:KITTY_INSTALL_TRACEBACK='1'
-          & .\Install.ps1
+          python tools/install-backend-for-ci.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:KITTY_INSTALLED_TEST='1'
           python tests/test-installed-windows.py
@@ -64,7 +64,7 @@ jobs:
         shell: powershell
         run: |
           $env:KITTY_INSTALL_TRACEBACK='1'
-          & .\Install.ps1
+          python tools/install-backend-for-ci.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Capture the actual Firefox toolbar popup
         env:
@@ -94,5 +94,7 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: bash test.sh
+      - run: node tests/test-backend-bootstrap.js
+      - run: python tests/test-backend-packaging.py
       - run: python tests/test-windows-port.py
       - run: python tests/test-visual-capture.py

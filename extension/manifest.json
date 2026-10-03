@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kitty Download Manager",
-  "version": "8.31",
+  "version": "8.32",
   "description": "Gestionnaire de téléchargements multimédia persistant basé sur yt-dlp.",
   "permissions": [
     "activeTab",
@@ -20,7 +20,13 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "kitty-download-manager@local"
+      "id": "kitty-download-manager@local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteActivity"
+        ]
+      }
     }
   },
   "icons": {

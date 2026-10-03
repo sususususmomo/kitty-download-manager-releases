@@ -17,7 +17,7 @@ sys.path.insert(0, str(NATIVE_DIR))
 from app_paths import macos_root, native_manifest_path, default_output_dir
 from installer_support import (check_private_path, atomic_bytes, atomic_json, verified_download,
                                safe_extract, native_query, checked_version_path, current_install,
-                               paused_maintenance)
+                               paused_maintenance, source_backend_version)
 from queue_store import queue_lock
 
 HOST_NAME = "com.kitty.download_manager"
@@ -129,11 +129,12 @@ def commit_install(root, stage, version, *, manifest_path=None, validate=None):
     try:
         if validate:
             validate(version_dir)
-        if extension.exists():
-            os.replace(extension, old_extension)
-            moved_extension = True
-        published_extension = True
-        shutil.copytree(version_dir / "extension", extension)
+        if (version_dir / "extension").is_dir():
+            if extension.exists():
+                os.replace(extension, old_extension)
+                moved_extension = True
+            published_extension = True
+            shutil.copytree(version_dir / "extension", extension)
         atomic_bytes(root / "native-host.sh", launcher_content(version_dir))
         (root / "native-host.sh").chmod(0o700)
         atomic_bytes(root / "Uninstall.command", launcher_content(version_dir, "macos_install.py"))
@@ -186,8 +187,7 @@ def install(args):
     source = Path(args.source).resolve()
     if stage.parent != root or not re.fullmatch(r"stage-[A-Za-z0-9]+", stage.name):
         raise RuntimeError("Dossier de préparation inattendu.")
-    manifest = json.loads((source / "extension/manifest.json").read_text(encoding="utf-8"))
-    version = str(manifest["version"])
+    version = source_backend_version(source)
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
         raise RuntimeError("Version Kitty invalide.")
     backend = stage / "backend"
@@ -196,7 +196,8 @@ def install(args):
         origin = source / "native-host" / filename
         compile(origin.read_text(encoding="utf-8"), str(origin), "exec")
         shutil.copy2(origin, backend / filename)
-    shutil.copytree(source / "extension", stage / "extension")
+    if (source / "extension").is_dir():
+        shutil.copytree(source / "extension", stage / "extension")
     shutil.copy2(source / "THIRD-PARTY-NOTICES.md", stage / "THIRD-PARTY-NOTICES.md")
     if not args.no_dependencies:
         print("Préparation de FFmpeg et Deno…", flush=True)

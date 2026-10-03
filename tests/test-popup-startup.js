@@ -16,6 +16,8 @@ function startupContext(preferences, status) {
   const events = [];
   const context = {
     popupInitialized: false,
+    renderBackendConnection: () => {},
+    prepareBackendInstaller: () => Promise.resolve(),
     document: {
       documentElement: {classList: {remove: name => events.push(`reveal:${name}`)}},
       body: {setAttribute: (name, value) => events.push(`${name}:${value}`)}
@@ -74,6 +76,11 @@ function startupContext(preferences, status) {
   let answer = new Promise(() => {});
   const refreshContext = {
     nativeMessage: () => answer,
+    ensureNativeCompatibility: () => Promise.resolve({compatible:true,backend_version:"8.31"}),
+    setBackendConnection: () => {},
+    renderBackendConnection: () => {},
+    backendConnection: {kind:"ready"},
+    KittyBackend: {connectionFailure: () => "unavailable"},
     I18N: {tr: value => value},
     backendErrorMessage: () => 'unavailable',
     render: () => { renders++; },
