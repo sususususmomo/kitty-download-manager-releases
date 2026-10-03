@@ -63,6 +63,8 @@ function popupState() {
     backendCheckVisible: Boolean(doc.getElementById("checkKittyUpdate")?.getClientRects().length),
     backendRetryVisible: Boolean(doc.getElementById("verifyBackend")?.getClientRects().length),
     backendReleaseStatus: text("backendReleaseStatus"),
+    backendIconState: doc.getElementById("backendHeaderMark")?.dataset.state,
+    destinationTitle: doc.querySelector('[data-settings-section="destination"] .settingsGroupTitle')?.textContent.trim(),
     pillMenuVisible: Boolean(doc.getElementById("pillStyleMenu")?.getClientRects().length),
     settingsSections: Object.fromEntries([...doc.querySelectorAll(".settingsCollapse")]
       .map(section => [section.dataset.settingsSection, !section.classList.contains("collapsed")])),
@@ -75,7 +77,7 @@ async function command(request) {
       await browser.storage.local.set({
         uiLanguage: "fr", selectedMode: "1080",
         sectionStates: { download: true, queue: false, history: false },
-        settingsSectionStates: { language: false, destination: false, backend: false, pill: false, cookies: false, dependencies: false, diagnostic: false, maintenance: false },
+        settingsSectionStates: { language: false, destination: false, pill: false, backend: false, cookies: false, dependencies: false, diagnostic: false, maintenance: false },
       });
       return browser.runtime.sendNativeMessage("com.kitty.download_manager", { action: "status" });
     case "settings-storage":

@@ -74,7 +74,7 @@ const runDiagnosticsBtn = document.getElementById("runDiagnostics");
 const checkUpdatesBtn = document.getElementById("checkUpdates");
 const checkKittyUpdateBtn = document.getElementById("checkKittyUpdate");
 const downloadBackendEl = document.getElementById("downloadBackend");
-const backendUpdateMarkEl = document.getElementById("backendUpdateMark");
+const backendHeaderMarkEl = document.getElementById("backendHeaderMark");
 const dependencyStateEl = document.getElementById("dependencyState");
 const dependencyStateTextEl = document.getElementById("dependencyStateText");
 const dependencyListEl = document.getElementById("dependencyList");
@@ -626,10 +626,23 @@ function renderBackendActions() {
     instruction.hidden = false;
     instruction.textContent = I18N.tr("Aucun installateur disponible pour ce système.");
   }
-  backendUpdateMarkEl.hidden = !update && kind !== "incompatible";
-  backendUpdateMarkEl.className = "backendUpdateMark " + (kind === "incompatible" ? "incompatible" : "available");
-  backendUpdateMarkEl.textContent = kind === "incompatible" ? "!" : "↑";
-  backendUpdateMarkEl.title = I18N.tr(kind === "incompatible" ? "Mise à jour requise" : "Mise à jour disponible");
+  // Green requires a compatible connection and a successful version comparison.
+  // A connection alone does not prove that its updates have been checked.
+  const releaseFailed = release?.ok === false || release?.state === "error";
+  const current = ready && !backendUpdateBusy && (release?.up_to_date || release?.local_newer);
+  const phase = kind === "incompatible" || kind === "unavailable" ? "Error"
+    : kind === "missing" || (ready && !backendUpdateBusy && (update || releaseFailed)) ? "Warning"
+    : current ? "Ready" : "Unknown";
+  backendHeaderMarkEl.className = "settingsStateMark backend" + phase;
+  backendHeaderMarkEl.dataset.state = phase.toLowerCase();
+  backendHeaderMarkEl.title = I18N.tr(kind === "checking" ? "Vérification de la connexion…"
+    : kind === "missing" ? "Backend non installé"
+    : kind === "unavailable" ? "Connexion au backend impossible"
+    : kind === "incompatible" ? "Mise à jour requise"
+    : backendUpdateBusy ? "Recherche…"
+    : releaseFailed ? "La recherche de mise à jour a échoué. Réessaie."
+    : update ? "Mise à jour disponible"
+    : current ? "Le backend est à jour." : "Mises à jour non vérifiées.");
 }
 
 async function prepareBackendInstaller() {
@@ -1389,8 +1402,8 @@ document.querySelectorAll(".sectionToggle").forEach(toggle => {
 const settingsSectionDefaults = Object.freeze({
   language: false,
   destination: false,
-  backend: false,
   pill: false,
+  backend: false,
   cookies: false,
   dependencies: false,
   diagnostic: false,

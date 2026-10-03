@@ -854,10 +854,16 @@
       opacity: 1;
     }
 
+    .settingsAccentGlyph.language,
     .settingsAccentGlyph.destination {
       color: #72B9E8;
       background: rgba(74,163,223,.10);
       border: 1px solid rgba(74,163,223,.16);
+    }
+    .settingsAccentGlyph svg {
+      width: 12px;
+      height: 12px;
+      display: block;
     }
     .settingsAccentGlyph.pill {
       color: #6E9DE8;
@@ -909,30 +915,41 @@
       box-shadow: 0 0 0 2px rgba(99,217,139,.08);
     }
 
+    .settingsStateMark.backendUnknown::before,
     .settingsStateMark.dependencyUnknown::before,
+    .settingsStateMark.backendReady::before,
     .settingsStateMark.dependencyReady::before,
+    .settingsStateMark.backendWarning::before,
     .settingsStateMark.dependencyWarning::before,
+    .settingsStateMark.backendError::before,
     .settingsStateMark.dependencyError::before {
       content: "";
       width: 6px;
       height: 6px;
       border-radius: 50%;
     }
+    .settingsStateMark.backendUnknown::before,
     .settingsStateMark.dependencyUnknown::before { background: #777; }
+    .settingsStateMark.backendReady,
     .settingsStateMark.dependencyReady {
       background: rgba(99,217,139,.08);
       border-color: rgba(99,217,139,.18);
     }
+    .settingsStateMark.backendReady::before,
     .settingsStateMark.dependencyReady::before { background: var(--kitty-success); }
+    .settingsStateMark.backendWarning,
     .settingsStateMark.dependencyWarning {
       background: rgba(230,184,92,.08);
       border-color: rgba(230,184,92,.20);
     }
+    .settingsStateMark.backendWarning::before,
     .settingsStateMark.dependencyWarning::before { background: var(--kitty-metadata); }
+    .settingsStateMark.backendError,
     .settingsStateMark.dependencyError {
       background: rgba(239,109,109,.08);
       border-color: rgba(239,109,109,.20);
     }
+    .settingsStateMark.backendError::before,
     .settingsStateMark.dependencyError::before { background: var(--kitty-error); }
 
     .settingsCollapse[data-settings-section="cookies"].cookiesInactive:not(.collapsed) {
@@ -1370,36 +1387,6 @@
     .backendReleaseStatus[hidden], #backendInstallInstruction[hidden],
     #checkKittyUpdate[hidden], #verifyBackend[hidden] { display: none; }
     .backendDownload[aria-disabled="true"] { opacity: .45; cursor: default; }
-    .backendUpdateMark {
-      min-width: 18px;
-      height: 18px;
-      padding: 0 4px;
-      display: inline-grid;
-      place-items: center;
-      border-radius: 999px;
-      font-size: 9px;
-      font-weight: 950;
-      line-height: 1;
-      box-sizing: border-box;
-      margin-left: 2px;
-      border: 1px solid transparent;
-    }
-    .backendUpdateMark[hidden] { display: none; }
-    .backendUpdateMark.available {
-      color: #9DC1FA;
-      background: rgba(42,98,187,.12);
-      border-color: rgba(80,135,219,.22);
-    }
-    .backendUpdateMark.review {
-      color: #F0C96F;
-      background: rgba(230,184,92,.10);
-      border-color: rgba(230,184,92,.24);
-    }
-    .backendUpdateMark.incompatible {
-      color: #FFAAAA;
-      background: rgba(239,109,109,.11);
-      border-color: rgba(239,109,109,.24);
-    }
     #checkUpdates { border-color: rgba(167,139,250,.22); }
     .toolButtons {
       display: grid;
@@ -1632,7 +1619,7 @@
 
     <div class="settingsGroup settingsCollapse collapsed" data-settings-section="language">
       <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-language-body">
-        <span class="settingsGroupTitle settingsTitleWithAccent"><span>Langue</span></span>
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph language" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18Z"/></svg></span><span>Langue</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
       <div id="settings-language-body" class="settingsGroupBody">
@@ -1648,7 +1635,7 @@
 
     <div class="settingsGroup settingsCollapse collapsed" data-settings-section="destination">
       <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-destination-body">
-        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph destination" aria-hidden="true">▰</span><span>Destination</span></span>
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph destination" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/><path d="M3 8h18"/></svg></span><span>Dossier de destination</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
       <div id="settings-destination-body" class="settingsGroupBody">
@@ -1659,24 +1646,6 @@
           <button id="chooseDestination" class="ghost" type="button">Choisir…</button>
         </div>
         <div class="settingsHint">Les nouveaux jobs utilisent ce dossier. Les jobs déjà en file gardent leur destination.</div>
-      </div>
-    </div>
-
-    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="backend" id="backendSettings">
-      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-backend-body">
-        <span class="settingsGroupTitle settingsTitleWithAccent"><span>Backend Kitty</span><span id="backendUpdateMark" class="backendUpdateMark" aria-hidden="true" hidden></span></span>
-        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
-      </button>
-      <div id="settings-backend-body" class="settingsGroupBody">
-        <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
-        <div id="backendPlatform" class="settingsRowSub"></div>
-        <div id="backendReleaseStatus" class="backendReleaseStatus" role="status" aria-live="polite" hidden></div>
-        <div class="backendButtons">
-          <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger l’installateur</a>
-          <button id="checkKittyUpdate" class="ghost" type="button" hidden>Rechercher une mise à jour</button>
-          <button id="verifyBackend" class="ghost" type="button" hidden>Réessayer la connexion</button>
-        </div>
-        <div id="backendInstallInstruction" class="settingsHint" hidden></div>
       </div>
     </div>
 
@@ -1737,6 +1706,24 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="backend" id="backendSettings">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-backend-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span id="backendHeaderMark" class="settingsStateMark backendUnknown" aria-hidden="true"></span><span>Backend Kitty</span></span>
+        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="settings-backend-body" class="settingsGroupBody">
+        <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
+        <div id="backendPlatform" class="settingsRowSub"></div>
+        <div id="backendReleaseStatus" class="backendReleaseStatus" role="status" aria-live="polite" hidden></div>
+        <div class="backendButtons">
+          <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger l’installateur</a>
+          <button id="checkKittyUpdate" class="ghost" type="button" hidden>Rechercher une mise à jour</button>
+          <button id="verifyBackend" class="ghost" type="button" hidden>Réessayer la connexion</button>
+        </div>
+        <div id="backendInstallInstruction" class="settingsHint" hidden></div>
       </div>
     </div>
 
@@ -1845,7 +1832,7 @@
     </div>
 
     <div id="settingsStatus" role="status" aria-live="polite"></div>
-    <div class="settingsFooter">Kitty Download Manager · v8.34</div>
+    <div class="settingsFooter">Kitty Download Manager · v8.35</div>
   </div>
 
   <script src="i18n.js"></script>

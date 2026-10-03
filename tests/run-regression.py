@@ -2330,9 +2330,9 @@ def test_update_diagnostic_ui_contract():
     shared = (EXT / "shared.js").read_text(encoding="utf-8")
     background = (EXT / "background.js").read_text(encoding="utf-8")
 
-    for element_id in ("backendUpdateMark", "checkUpdates", "checkKittyUpdate", "downloadBackend"):
+    for element_id in ("backendHeaderMark", "checkUpdates", "checkKittyUpdate", "downloadBackend"):
         check(f'id="{element_id}"' in html, f"UI update absente: {element_id}")
-    check("backendUpdateMark.incompatible" in html, "style mismatch frontend/backend absent")
+    check("settingsStateMark.backendError" in html, "style mismatch frontend/backend absent")
     check("renderBackendActions" in js, "renderer icône update absent")
     check('nativeMessage({ action: "check_updates" })' in js, "bouton check_updates non branché")
     check('nativeMessage({ action: "download_kitty_update" })' in js, "bouton download update non branché")

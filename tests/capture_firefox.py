@@ -314,7 +314,7 @@ def run():
         wait_state(settings_rendered)
         command("scroll", bottom=False)
         capture("06-reglages", "Réglages — groupes repliés")
-        expected_sections = ["language", "destination", "backend", "pill", "cookies", "dependencies", "diagnostic", "maintenance"]
+        expected_sections = ["language", "destination", "pill", "backend", "cookies", "dependencies", "diagnostic", "maintenance"]
         settings = command("state")
         if (settings.get("settingsOrder") != expected_sections or any(settings["settingsSections"].values())
                 or not settings.get("settingsAccessible") or not settings.get("updateControlsInBackend")):
@@ -370,7 +370,7 @@ def run():
         command("click", selector="#backToMain")
         command("click", selector="#openSettings")
         older = wait_state(lambda state: "plus récente" in state.get("backendReleaseStatus", ""))
-        if older.get("backendDownloadVisible") or not older.get("backendCheckVisible"):
+        if older.get("backendDownloadVisible") or not older.get("backendCheckVisible") or older.get("backendIconState") != "ready":
             raise RuntimeError(f"Une ancienne release est proposée après l’upgrade : {older}")
         command("scroll", selector='[data-settings-section="backend"]')
         capture("16-cache-ancienne-release", "Backend — v8.18 en cache, version installée plus récente")
@@ -381,14 +381,14 @@ def run():
         command("click", selector="#backToMain")
         command("click", selector="#openSettings")
         newer = wait_state(lambda state: state.get("backendDownloadVisible") and "8.40" in state.get("backendDownloadText", ""))
-        if newer.get("backendCheckVisible") or newer.get("backendRetryVisible") or newer.get("backendDownloadMode") != "update":
+        if newer.get("backendCheckVisible") or newer.get("backendRetryVisible") or newer.get("backendDownloadMode") != "update" or newer.get("backendIconState") != "warning":
             raise RuntimeError(f"Actions backend redondantes : {newer}")
         command("scroll", selector='[data-settings-section="backend"]')
         capture("17-cache-nouvelle-release", "Backend — exemple de nouvelle version, un seul téléchargement")
         release_cache.unlink(missing_ok=True)
         command("click", selector="#backToMain")
         command("click", selector="#openSettings")
-        wait_state(lambda state: state.get("backendCheckVisible") and not state.get("backendDownloadVisible"))
+        wait_state(lambda state: state.get("backendCheckVisible") and not state.get("backendDownloadVisible") and state.get("backendIconState") == "unknown")
         capture("18-backend-connecte-francais", "Backend connecté — recherche de mise à jour uniquement")
         command("click", selector='[data-settings-section="backend"] .settingsGroupToggle')
         report["backend_actions"] = {"old_cache_recomputed": "ok", "single_download": "ok", "healthy_state": "ok", "update_examples_only": True}
@@ -415,6 +415,8 @@ def run():
         command("language", language="en")
         wait_state(lambda state: state.get("language") == "en" and state.get("backendText", "").startswith(("Backend not installed", "Cannot connect")))
         command("click", selector='[data-settings-section="language"] .settingsGroupToggle')
+        if command("state").get("destinationTitle") != "Destination folder":
+            raise RuntimeError("Le libellé anglais du dossier de destination est incorrect")
         capture("10-installation-english", "Backend setup — English")
         manifest_backup.rename(manifest)
         manifest_backup = None
