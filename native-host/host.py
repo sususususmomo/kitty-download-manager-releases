@@ -71,7 +71,7 @@ DEFAULT_OUTPUT_DIR = default_output_dir()
 DOWNLOADS_DIR = DEFAULT_OUTPUT_DIR.parent
 
 STATE_BACKUP_DIR = CACHE_DIR / "state-backups"
-APP_VERSION = "8.25"
+APP_VERSION = "8.26"
 UPDATE_CACHE_FILE = CACHE_DIR / "update-check.json"
 KITTY_RELEASE_CACHE_FILE = CACHE_DIR / "kitty-release-check.json"
 UPDATE_BACKUP_DIR = CACHE_DIR / "update-backups"

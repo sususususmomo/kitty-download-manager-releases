@@ -16,10 +16,18 @@ import uuid
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE / "native-host"))
 import windows_install
+import platform_support
 
 @unittest.skipUnless(sys.platform == "win32" and os.environ.get("KITTY_INSTALLED_TEST") == "1",
                      "Exige une installation Windows neuve et KITTY_INSTALLED_TEST=1")
 class InstalledWindowsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Native host descendants and the uninstall cleanup helper must be
+        # able to leave this test parent, while staying in the runner's outer
+        # Job. Match the real Firefox context instead of disabling its flags.
+        platform_support.configure_worker_job()
+
     def query_launcher(self, action):
         root = windows_install.app_root()
         command = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"

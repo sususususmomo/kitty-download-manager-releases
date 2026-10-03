@@ -1,4 +1,4 @@
-# Kitty Download Manager V8.25 — Windows x64, version de test
+# Kitty Download Manager V8.26 — Windows x64, version de test
 
 Cette distribution ajoute un installateur Windows à la base V8.24. Elle est
 destinée à Windows 10/11 x64 et à Firefox. L’installation ne nécessite ni Python
@@ -6,7 +6,7 @@ préinstallé ni droits administrateur. Une connexion Internet est nécessaire.
 
 ## Installation
 
-1. Extraire `kitty-download-manager-v8.25-windows-x64.zip`.
+1. Extraire `kitty-download-manager-v8.26-windows-x64.zip`.
 2. Ouvrir le dossier `kitty-download-manager`, puis double-cliquer sur `Install.cmd`.
 3. Attendre les téléchargements et les vérifications. En cas d’erreur, le message
    reste visible dans la fenêtre; ne pas considérer l’installation comme réussie.
@@ -33,7 +33,7 @@ Elle remplace les sources extraites, pas le dossier installé ni les réglages.
 ```powershell
 $downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 Set-Location -LiteralPath $downloads
-$zip = 'kitty-download-manager-v8.25-windows-x64.zip'
+$zip = 'kitty-download-manager-v8.26-windows-x64.zip'
 if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive absente de Téléchargements.' }
 if (Test-Path -LiteralPath '.\kitty-download-manager') { Remove-Item -LiteralPath '.\kitty-download-manager' -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
@@ -42,7 +42,7 @@ Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
 
 ## Extension Firefox permanente
 
-Le fichier `kitty-download-manager-v8.25-unsigned.xpi` est fourni pour la
+Le fichier `kitty-download-manager-v8.26-unsigned.xpi` est fourni pour la
 soumission à Mozilla. **Il n’est pas signé** : Firefox standard ne permet pas
 son installation permanente en l’état. Le chargement temporaire ci-dessus
 fonctionne pour les essais, mais doit être refait après un redémarrage de Firefox.
@@ -103,7 +103,20 @@ La validation automatisée Windows est préparée dans
 `.github/workflows/windows-validation.yml`. Elle couvre les vrais verrous
 interprocessus, le protocole binaire, l’annulation, l’arrêt, la survie du worker
 après fermeture du job parent, puis l’installation complète, la mise à jour,
-le remux audio et la désinstallation. Le workflow n’a pas été exécuté ici.
+le remux audio et la désinstallation.
+
+Le premier passage GitHub Actions de la V8.25 a réussi 26 tests Windows,
+ignoré les 2 simulations POSIX, puis échoué sur le lancement des workers dans
+les 2 tests d’annulation et d’arrêt (`WinError 5`). Le runner place les tests
+dans un Job qui refuse le détachement demandé par les processus persistants.
+La V8.26 prépare un Job intermédiaire autorisant ce détachement, comme dans le
+contexte du host Firefox. Les flags de production et les assertions restent
+actifs; les enfants restent contenus par le Job externe du runner. Le test
+de survie qui préparait déjà ce contexte avait réussi lors du premier passage.
+La même préparation est appliquée aux tests sur installation complète.
+
+Le workflow corrigé doit encore être relancé sur un vrai Windows; les résultats
+Linux locaux ne valident pas à eux seuls l’installation Windows ni Firefox.
 
 ```powershell
 python -m pip install psutil

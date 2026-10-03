@@ -47,7 +47,7 @@ class InstallerTests(unittest.TestCase):
     def stage(self):
         stage = self.root / ("stage-" + "a" * 32)
         (stage / "extension").mkdir(parents=True)
-        (stage / "extension/manifest.json").write_text('{"version":"8.25"}', encoding="utf-8")
+        (stage / "extension/manifest.json").write_text('{"version":"8.26"}', encoding="utf-8")
         return stage
 
     def old_install(self):
@@ -61,7 +61,7 @@ class InstallerTests(unittest.TestCase):
             path.write_bytes(b"conserver")
 
     def test_publish_uses_stable_manifest_and_private_runtime(self):
-        version = installer.commit_install(self.root, self.stage(), "8.25", register_host=False)
+        version = installer.commit_install(self.root, self.stage(), "8.26", register_host=False)
         manifest = json.loads((self.root / f"{installer.HOST_NAME}.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["allowed_extensions"], ["kitty-download-manager@local"])
         self.assertEqual(manifest["path"], str(self.root / "native-host.bat"))
@@ -81,7 +81,7 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "register", side_effect=OSError("registre inaccessible")), \
              patch.object(installer, "restore_registry") as restore:
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, self.stage(), "8.25")
+                installer.commit_install(self.root, self.stage(), "8.26")
             restore.assert_called_once_with(["snapshot"])
         for name, content in originals.items():
             self.assertEqual((self.root / name).read_bytes(), content)
@@ -92,7 +92,7 @@ class InstallerTests(unittest.TestCase):
     def test_validation_after_move_fails_without_replacing_old_install(self):
         self.old_install()
         with self.assertRaises(RuntimeError):
-            installer.commit_install(self.root, self.stage(), "8.25", register_host=False,
+            installer.commit_install(self.root, self.stage(), "8.26", register_host=False,
                                      validate=lambda _path: (_ for _ in ()).throw(RuntimeError("backend casse")))
         self.assertEqual((self.root / "extension/manifest.json").read_text(), "ancien")
         self.assertEqual((self.root / "current.json").read_bytes(), b"ancien:current.json")
@@ -105,12 +105,12 @@ class InstallerTests(unittest.TestCase):
             raise OSError("disque plein")
         with patch.object(installer.shutil, "copytree", side_effect=broken_copy):
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, stage, "8.25", register_host=False)
+                installer.commit_install(self.root, stage, "8.26", register_host=False)
         self.assertFalse((self.root / "extension").exists())
         self.assertFalse((self.root / "current.json").exists())
 
     def test_paths_in_metadata_cannot_escape_runtime_versions(self):
-        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.25", "versions/8.25-" + "x" * 32):
+        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.26", "versions/8.26-" + "x" * 32):
             with self.subTest(path=path), self.assertRaises(RuntimeError):
                 installer.checked_version_path(self.root, {"directory": path})
 
@@ -291,9 +291,9 @@ class InstallerTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("windows_asset_test", NATIVE / "host.py")
         host = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(host)
-        version = "8.26"
+        version = "8.27"
         linux = {"name": f"kitty-download-manager-v{version}.zip", "digest": "sha256:" + "a" * 64,
-                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.26/file.zip"}
+                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.27/file.zip"}
         windows = dict(linux, name=f"kitty-download-manager-v{version}-windows-x64.zip")
         payload = {"tag_name": "v" + version, "assets": [linux, windows]}
         with patch.object(host, "WINDOWS", True), patch.object(host, "urlopen", return_value=io.BytesIO(json.dumps(payload).encode())):
@@ -386,6 +386,14 @@ raise SystemExit(worker.main())
 
 @unittest.skipUnless(sys.platform == "win32", "Exige un vrai Windows et psutil")
 class WindowsProcessTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # A hosted runner may put Python in a Job that denies breakaway. Give
+        # this test parent a nested Job that allows it, like Firefox's native
+        # host context. Workers still use the actual production spawn flags;
+        # the runner's outer Job continues to own the complete test tree.
+        platform_api.configure_worker_job()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="kitty-native-windows-")
         self.addCleanup(self.temp.cleanup)
@@ -420,7 +428,11 @@ class YoutubeDL:
         self.fake_ytdlp()
         proc = subprocess.Popen([sys.executable, str(NATIVE / "worker.py"), "test-job"], env=self.env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, **platform_api.spawn_options())
-        self.addCleanup(lambda: proc.kill() if proc.poll() is None else None)
+        def cleanup_worker():
+            if proc.poll() is None:
+                proc.kill()
+            proc.communicate(timeout=10)
+        self.addCleanup(cleanup_worker)
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             active = queue_store.read_state(self.cache / "queue.json", self.cache / "queue.lock").get("active")
@@ -447,8 +459,8 @@ class YoutubeDL:
         queue_store.mutate_state(self.cache / "queue.json", self.cache / "queue.lock", lambda d: d["active"].update(output_stem=str(output / "video")))
         proc = self.worker()
         installer.atomic_json(self.cache / "controls/test-job.json", {"action": "cancel"})
-        proc.communicate(timeout=15)
-        self.assertEqual(proc.returncode, 0)
+        _, error = proc.communicate(timeout=15)
+        self.assertEqual(proc.returncode, 0, error.decode("utf-8", "replace"))
         state = queue_store.read_state(self.cache / "queue.json", self.cache / "queue.lock")
         self.assertIsNone(state["active"])
         self.assertEqual(state["history"][0]["status"], "cancelled")
@@ -460,8 +472,8 @@ class YoutubeDL:
         partial.write_bytes(b"partiel")
         proc = self.worker()
         installer.atomic_json(self.cache / "controls/test-job.json", {"action": "stop"})
-        proc.communicate(timeout=15)
-        self.assertEqual(proc.returncode, 128 + int(signal.SIGTERM))
+        _, error = proc.communicate(timeout=15)
+        self.assertEqual(proc.returncode, 128 + int(signal.SIGTERM), error.decode("utf-8", "replace"))
         state = queue_store.read_state(self.cache / "queue.json", self.cache / "queue.lock")
         self.assertTrue(state["queue_paused"])
         self.assertIsNone(state["active"])

@@ -69,7 +69,7 @@ def verified_download(url, destination, digest, expected_size=None):
     total = 0
     hasher = hashlib.sha256()
     try:
-        request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.25"})
+        request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.26"})
         with urlopen(request, timeout=90) as response, destination.open("xb") as out:
             while True:
                 block = response.read(256 * 1024)
@@ -109,7 +109,7 @@ def safe_extract(archive, destination):
 
 def github_binary(repo, asset_name, stage, executable_names):
     url = f"https://api.github.com/repos/{repo}/releases/latest"
-    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.25",
+    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.26",
                                    "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
         release = json.loads(response.read(4_000_000))
