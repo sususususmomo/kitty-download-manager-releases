@@ -41,6 +41,34 @@ function startupContext(preferences, status) {
   vm.runInContext(startupSource, context);
   return { context, events };
 }
+
+function refreshContextForTest(status, compatibility) {
+  const events = [];
+  const context = {
+    nativeMessage: payload => {
+      assert.equal(payload.action, 'status');
+      events.push('status:start');
+      return status;
+    },
+    ensureNativeCompatibility: () => {
+      events.push('compatibility:start');
+      return compatibility;
+    },
+    backendConnection: {kind:'checking'},
+    setBackendConnection: kind => {context.backendConnection.kind=kind;},
+    renderBackendConnection: () => events.push('connection:render'),
+    KittyBackend: {connectionFailure: () => 'unavailable'},
+    I18N: {tr: value => value},
+    backendErrorMessage: () => 'unavailable',
+    render: () => events.push('state:render'),
+    statusEl: {textContent:''},
+    schedulePopupPoll: () => {},
+    setTimeout, clearTimeout
+  };
+  vm.createContext(context);
+  vm.runInContext(refreshSource, context);
+  return {context,events};
+}
 (async () => {
   // A quick status must not reveal the default layout while storage is pending.
   const pref = deferred();
@@ -98,5 +126,48 @@ function startupContext(preferences, status) {
   await refreshContext.refresh(false, 5);
   assert.equal(renders, 1);
 
-  console.log('Démarrage popup : 4 scénarios asynchrones OK');
+  // Both native calls must start before either answer, in either completion
+  // order. A fast status alone must not expose a false ready state.
+  for (const firstAnswer of ['status','compatibility']) {
+    const status=deferred();
+    const compatibility=deferred();
+    const probe=refreshContextForTest(status.promise,compatibility.promise);
+    const request=probe.context.refresh(false,5000);
+    await nextTurn();
+    assert.ok(probe.events.includes('status:start'));
+    assert.ok(probe.events.includes('compatibility:start'));
+    const responses={status:{ok:true,state:{active:null}},compatibility:{compatible:true,backend_version:'8.31'}};
+    const answers={status,compatibility};
+    answers[firstAnswer].resolve(responses[firstAnswer]);
+    await nextTurn();
+    assert.equal(probe.events.includes('state:render'),false);
+    const lastAnswer=firstAnswer==='status'?'compatibility':'status';
+    answers[lastAnswer].resolve(responses[lastAnswer]);
+    await request;
+    assert.equal(probe.events.filter(event=>event==='state:render').length,1);
+    assert.equal(probe.context.backendConnection.kind,'ready');
+  }
+
+  // A failed status should finish promptly even if the parallel compatibility
+  // call never responds. A failed compatibility check must not mark ready.
+  const statusError=refreshContextForTest(Promise.resolve({ok:false}),new Promise(()=>{}));
+  let failedStatusFinished=false;
+  const errorRequest=statusError.context.refresh(false,5000).then(()=>{failedStatusFinished=true;});
+  await nextTurn();
+  assert.equal(failedStatusFinished,true);
+  await errorRequest;
+  assert.equal(statusError.events.includes('state:render'),false);
+  const incompatible=refreshContextForTest(Promise.resolve({ok:true,state:{}}),Promise.resolve({compatible:false}));
+  await incompatible.context.refresh(false,5000);
+  assert.equal(incompatible.context.backendConnection.kind,'incompatible');
+
+  // A late compatibility answer after the deadline cannot paint its old state.
+  const lateAnswer=deferred();
+  const late=refreshContextForTest(Promise.resolve({ok:true,state:{active:{id:'old'}}}),lateAnswer.promise);
+  assert.equal(await late.context.refresh(false,5),null);
+  lateAnswer.resolve({compatible:true,backend_version:'8.31'});
+  await nextTurn();
+  assert.equal(late.events.includes('state:render'),false);
+
+  console.log('Démarrage popup : 9 scénarios asynchrones OK');
 })().catch(error => { console.error(error); process.exitCode=1; });

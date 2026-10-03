@@ -1318,8 +1318,11 @@ async function refresh(force = false, timeoutMs = 0) {
   let timeout = 0;
   try {
     const request = (async () => {
+      // Launch the independent native calls together. Only a successful status
+      // waits for compatibility; a missing/unreachable host can fail promptly.
+      const compatibilityRequest = ensureNativeCompatibility();
       const response = await nativeMessage({ action: "status" });
-      if (response?.ok) response.kittyCompatibility = await ensureNativeCompatibility();
+      if (response?.ok) response.kittyCompatibility = await compatibilityRequest;
       return response;
     })();
     const r = timeoutMs > 0
