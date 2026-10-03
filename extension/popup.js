@@ -72,7 +72,8 @@ const copyDiagnosticsBtn = document.getElementById("copyDiagnostics");
 const refreshDiagnosticsBtn = document.getElementById("refreshDiagnostics");
 const runDiagnosticsBtn = document.getElementById("runDiagnostics");
 const checkUpdatesBtn = document.getElementById("checkUpdates");
-const downloadKittyUpdateBtn = document.getElementById("downloadKittyUpdate");
+const checkKittyUpdateBtn = document.getElementById("checkKittyUpdate");
+const downloadBackendEl = document.getElementById("downloadBackend");
 const backendUpdateMarkEl = document.getElementById("backendUpdateMark");
 const dependencyStateEl = document.getElementById("dependencyState");
 const dependencyStateTextEl = document.getElementById("dependencyStateText");
@@ -526,7 +527,11 @@ let popupPollTimer = 0;
 let popupInitialized = false;
 let backendConnection = {kind: "checking", version: ""};
 let backendInstaller = null;
-const backendControlIds = ["download", "openFolder", "cancel", "pauseQueue", "clearQueue", "clearHistory", "chooseDestination", "openLogs", "refreshDiagnostics", "runDiagnostics", "checkUpdates", "downloadKittyUpdate", "cleanCache", "resetKitty", "youtubeAuthConfigure", "youtubeAuthDelete", "youtubeAuthEnabled"];
+let backendReleaseReport = null;
+let backendUpdateBusy = false;
+let backendDownloadBusy = false;
+let dependencyUpdatesBusy = false;
+const backendControlIds = ["download", "openFolder", "cancel", "pauseQueue", "clearQueue", "clearHistory", "chooseDestination", "openLogs", "refreshDiagnostics", "runDiagnostics", "checkUpdates", "cleanCache", "resetKitty", "youtubeAuthConfigure", "youtubeAuthDelete", "youtubeAuthEnabled"];
 
 function setBackendConnection(kind, version = "") {
   backendConnection = {kind, version};
@@ -571,19 +576,67 @@ function renderBackendConnection() {
       delete control.dataset.backendDisabled;
     }
   }
+  renderBackendActions();
+}
+
+function renderBackendActions() {
+  const {kind, version} = backendConnection;
+  const ready = kind === "ready";
+  const release = KittyBackend.releaseForVersion(backendReleaseReport, version);
+  const update = ready && release?.update_available;
+  const needsInstaller = kind === "missing" || kind === "incompatible";
+  const status = document.getElementById("backendReleaseStatus");
+  status.hidden = !ready || !release;
+  status.textContent = !release ? "" : release.ok === false || release.state === "error"
+    ? I18N.tr("La recherche de mise à jour a échoué. Réessaie.")
+    : release.local_newer ? I18N.tr("Version installée plus récente que la release publique") + ` (v${release.latest_version}).`
+    : release.update_available ? I18N.tr("Mise à jour disponible") + ` · v${release.latest_version}`
+    : I18N.tr("Le backend est à jour.");
+
+  downloadBackendEl.hidden = !update && !(needsInstaller && backendInstaller);
+  downloadBackendEl.dataset.action = update ? "update" : "install";
+  downloadBackendEl.removeAttribute("href");
+  downloadBackendEl.removeAttribute("aria-disabled");
+  downloadBackendEl.removeAttribute("tabindex");
+  downloadBackendEl.title = "";
+  if (update) {
+    downloadBackendEl.textContent = backendDownloadBusy ? I18N.tr("Téléchargement…") : I18N.tr("Télécharger") + ` v${release.latest_version}`;
+    const supported = release.download_supported && /^https:\/\/github\.com\/sususususmomo\/kitty-download-manager-releases\/releases\/download\//.test(release.asset_url || "") && /^[a-f0-9]{64}$/i.test(release.asset_sha256 || "");
+    if (supported && !backendDownloadBusy) downloadBackendEl.href = release.asset_url;
+    else {
+      downloadBackendEl.setAttribute("aria-disabled", "true");
+      downloadBackendEl.tabIndex = -1;
+      downloadBackendEl.title = I18N.tr(release.error || "Archive de mise à jour indisponible pour ce système.");
+    }
+  } else if (backendInstaller) {
+    downloadBackendEl.textContent = I18N.tr("Télécharger l’installateur") + ` ${backendInstaller.actionLabel || backendInstaller.label}`;
+    downloadBackendEl.href = backendInstaller.url;
+  }
+
+  checkKittyUpdateBtn.hidden = !ready || Boolean(update);
+  checkKittyUpdateBtn.disabled = backendUpdateBusy;
+  checkKittyUpdateBtn.textContent = I18N.tr(backendUpdateBusy ? "Recherche…" : "Rechercher une mise à jour");
+  const retry = document.getElementById("verifyBackend");
+  retry.hidden = kind !== "unavailable";
+  retry.disabled = kind === "checking";
+  const instruction = document.getElementById("backendInstallInstruction");
+  instruction.hidden = downloadBackendEl.hidden;
+  instruction.textContent = backendInstaller ? I18N.tr(backendInstaller.instruction) : "";
+  if (!backendInstaller && !ready) {
+    instruction.hidden = false;
+    instruction.textContent = I18N.tr("Aucun installateur disponible pour ce système.");
+  }
+  backendUpdateMarkEl.hidden = !update && kind !== "incompatible";
+  backendUpdateMarkEl.className = "backendUpdateMark " + (kind === "incompatible" ? "incompatible" : "available");
+  backendUpdateMarkEl.textContent = kind === "incompatible" ? "!" : "↑";
+  backendUpdateMarkEl.title = I18N.tr(kind === "incompatible" ? "Mise à jour requise" : "Mise à jour disponible");
 }
 
 async function prepareBackendInstaller() {
-  const link = document.getElementById("downloadBackend");
   try { backendInstaller = KittyBackend.selectInstaller(await browser.runtime.getPlatformInfo()); }
   catch { backendInstaller = null; }
-  link.hidden = !backendInstaller;
-  if (backendInstaller) link.href = backendInstaller.url;
-  else link.removeAttribute("href");
-  document.getElementById("backendPlatform").textContent = backendInstaller?.label ||
-    I18N.tr("Aucun installateur disponible pour ce système.");
-  document.getElementById("backendInstallInstruction").textContent = backendInstaller
-    ? I18N.tr(backendInstaller.instruction) : "";
+  document.getElementById("backendPlatform").textContent = backendInstaller?.label || "";
+  renderBackendActions();
 }
 
 document.getElementById("configureBackend").addEventListener("click", () => {
@@ -1688,64 +1741,6 @@ function renderCacheHealth(cache) {
 }
 
 
-function renderBackendUpdateMark(compatibility, updates, kittyRelease = null) {
-  if (!backendUpdateMarkEl) return;
-
-  backendUpdateMarkEl.hidden = true;
-  backendUpdateMarkEl.className = "backendUpdateMark";
-  backendUpdateMarkEl.textContent = "";
-  backendUpdateMarkEl.title = "";
-
-  const incompatible = !compatibility || compatibility.compatible === false;
-  if (incompatible) {
-    backendUpdateMarkEl.hidden = false;
-    backendUpdateMarkEl.classList.add("incompatible");
-    backendUpdateMarkEl.textContent = "!";
-    backendUpdateMarkEl.title = compatibility?.message ||
-      "Frontend/backend non vérifiés ou incompatibles · mise à jour requise";
-    return;
-  }
-
-  const risky = Number(updates?.risky_updates || 0);
-  const count = Number(updates?.updates_available || 0);
-  const kittyUpdate = Boolean(kittyRelease?.update_available);
-  if (risky > 0) {
-    backendUpdateMarkEl.hidden = false;
-    backendUpdateMarkEl.classList.add("review");
-    backendUpdateMarkEl.textContent = "↑!";
-    backendUpdateMarkEl.title = I18N.tr(`${risky} mise${risky > 1 ? "s" : ""} à jour à vérifier pour compatibilité`);
-  } else if (kittyUpdate) {
-    backendUpdateMarkEl.hidden = false;
-    backendUpdateMarkEl.classList.add("available");
-    backendUpdateMarkEl.textContent = "↑";
-    backendUpdateMarkEl.title = `${I18N.tr("Mise à jour disponible")} · Kitty ${kittyRelease.latest_version || "?"}`;
-  } else if (count > 0) {
-    backendUpdateMarkEl.hidden = false;
-    backendUpdateMarkEl.classList.add("available");
-    backendUpdateMarkEl.textContent = "↑";
-    backendUpdateMarkEl.title = I18N.tr(`${count} mise${count > 1 ? "s" : ""} à jour de dépendance disponible${count > 1 ? "s" : ""}`);
-  }
-}
-
-function kittyReleaseStateText(release) {
-  if (!release) return I18N.tr("Non vérifiée");
-  if (release.ok === false || release.state === "error") return I18N.tr("Erreur");
-  if (release.update_available) return I18N.tr("Mise à jour disponible");
-  if (release.local_newer) return I18N.tr("Version locale plus récente");
-  return I18N.tr("À jour");
-}
-
-function renderKittyUpdateButton(release) {
-  if (!downloadKittyUpdateBtn) return;
-  const available = Boolean(release?.update_available);
-  downloadKittyUpdateBtn.hidden = !available;
-  downloadKittyUpdateBtn.disabled = available && !release?.download_supported;
-  downloadKittyUpdateBtn.textContent = I18N.tr("Télécharger la mise à jour");
-  downloadKittyUpdateBtn.title = available && !release?.download_supported
-    ? I18N.tr(release?.error || "SHA-256 de la release indisponible")
-    : "";
-}
-
 function compatibilityText(compatibility) {
   if (!compatibility) return I18N.tr("backend ancien · update requis");
   const front = compatibility.frontend_version || FRONTEND_VERSION;
@@ -1766,8 +1761,8 @@ function renderDiagnosticsHealth(response) {
   const updateItems = new Map(
     (Array.isArray(updates?.items) ? updates.items : []).map(item => [item.id, item])
   );
-  renderBackendUpdateMark(r.compatibility, updates, kittyRelease);
-  renderKittyUpdateButton(kittyRelease);
+  backendReleaseReport = kittyRelease;
+  renderBackendActions();
 
   dependencyStateEl.classList.remove("ready", "warning", "error");
   dependencyStateEl.classList.add(overall);
@@ -1844,13 +1839,10 @@ function renderDiagnosticsHealth(response) {
       ? `${updates.updates_available} disponible${updates.updates_available > 1 ? "s" : ""}${updates.risky_updates ? ` · ${updates.risky_updates} à vérifier` : ""}`
       : "aucune détectée")
     : "non vérifiées";
-  const latestKitty = kittyRelease?.latest_version || "—";
-  document.getElementById("backendCompatibility").textContent = compatibilityText(r.compatibility);
-  document.getElementById("backendReleaseState").textContent = kittyReleaseStateText(kittyRelease);
-  document.getElementById("backendLatestRelease").textContent = latestKitty;
-  document.getElementById("backendDependencyUpdates").textContent = I18N.tr(updateText);
+  document.getElementById("dependencyUpdatesSummary").textContent = I18N.tr("Mises à jour :") + " " + I18N.tr(updateText);
 
   diagnosticFactsEl.innerHTML =
+    `<div class="diagnosticFact">Compatibilité : <strong>${escapeHtml(compatibilityText(r.compatibility))}</strong></div>` +
     `<div class="diagnosticFact">Destination : <strong>${escapeHtml(writeText)}</strong></div>` +
     `<div class="diagnosticFact">Espace libre : <strong>${escapeHtml(formatBytes(destination.free_bytes))}</strong></div>` +
     `<div class="diagnosticFact">Fichiers du backend : <strong>${escapeHtml(hostText)}</strong></div>` +
@@ -1884,8 +1876,8 @@ async function restoreDiagnostics(deep = false) {
       `</div>`;
     throw err;
   } finally {
-    refreshDiagnosticsBtn.disabled = false;
-    runDiagnosticsBtn.disabled = false;
+    refreshDiagnosticsBtn.disabled = backendConnection.kind !== "ready";
+    runDiagnosticsBtn.disabled = backendConnection.kind !== "ready";
   }
 }
 
@@ -1913,6 +1905,7 @@ function diagnosticCodeText(value) {
 
 function diagnosticsToText(diagnostics) {
   const d = diagnostics || {};
+  const release = KittyBackend.releaseForVersion({ok: d.kitty_release_state !== "error", state: d.kitty_release_state, latest_version: d.latest_kitty_version}, d.kitty_version);
   const line = (label, value, translateValue = true) =>
     `${I18N.tr(label)}: ${translateValue ? diagnosticCodeText(value) : String(value ?? "?")}`;
 
@@ -1946,7 +1939,7 @@ function diagnosticsToText(diagnostics) {
     line("Compatibilité frontend/backend", d.frontend_backend || "?"),
     line("Protocole frontend/backend", `${d.frontend_protocol ?? "?"}/${d.backend_protocol ?? "?"}`, false),
     line("Dernière release", d.latest_kitty_version || "non vérifiée"),
-    line("État release Kitty", d.kitty_release_state || "non vérifiée"),
+    line("État release Kitty", d.latest_kitty_version ? release?.state || "non vérifiée" : "non vérifiée"),
     line("Mises à jour dépendances", d.updates_available ?? "non vérifiées"),
     line("Mises à jour à vérifier", d.risky_updates ?? "non vérifiées"),
     line("État global", d.overall || "?"),
@@ -2031,67 +2024,68 @@ runDiagnosticsBtn.addEventListener("click", async () => {
   }
 });
 
-checkUpdatesBtn.addEventListener("click", async () => {
-  checkUpdatesBtn.disabled = true;
-  setSettingsStatus("Vérification réseau des mises à jour…");
+checkKittyUpdateBtn.addEventListener("click", async () => {
+  if (backendUpdateBusy || backendConnection.kind !== "ready") return;
+  backendUpdateBusy = true;
+  renderBackendActions();
+  setSettingsStatus();
   try {
-    const result = await nativeMessage({ action: "check_updates" });
-    if (!result?.ok) throw new Error(result?.error || "Vérification des mises à jour impossible.");
-    const updates = result.updates || {};
-    const kittyRelease = result.kitty_release || {};
-    await restoreDiagnostics(false);
-
-    if (kittyRelease.update_available) {
-      if (kittyRelease.download_supported) {
-        setSettingsStatus(`Kitty ${kittyRelease.latest_version} · ${I18N.tr("Mise à jour disponible")}.`, "success");
-      } else {
-        setSettingsStatus(`Kitty ${kittyRelease.latest_version} · ${I18N.tr(kittyRelease.error || "SHA-256 de la release indisponible")}.`, "error");
-      }
-    } else if (kittyRelease.ok === false) {
-      setSettingsStatus(`Kitty · ${I18N.tr("Vérification de la mise à jour Kitty impossible")}.`, "error");
-    } else if (updates.risky_updates > 0) {
-      setSettingsStatus(
-        `${updates.updates_available} mise(s) à jour · ${updates.risky_updates} demande(nt) une vérification de compatibilité.`,
-        "error"
-      );
-    } else if (updates.updates_available > 0) {
-      setSettingsStatus(`${updates.updates_available} mise(s) à jour disponible(s).`, "success");
-    } else if (kittyRelease.local_newer) {
-      setSettingsStatus(`Kitty ${FRONTEND_VERSION} · ${I18N.tr("Version locale plus récente")}.`, "success");
-    } else {
-      setSettingsStatus(`Kitty ${FRONTEND_VERSION} · ${I18N.tr("À jour")}.`, "success");
-    }
+    const result = await nativeMessage({ action: "check_kitty_update" });
+    if (!result?.ok) throw new Error(result?.error || "Vérification de la mise à jour Kitty impossible");
+    backendReleaseReport = result.kitty_release || null;
   } catch (err) {
-    setSettingsStatus("Erreur : " + err.message, "error");
+    backendReleaseReport = {ok: false, state: "error", error: err.message};
   } finally {
-    checkUpdatesBtn.disabled = false;
+    backendUpdateBusy = false;
+    renderBackendActions();
   }
 });
 
-downloadKittyUpdateBtn?.addEventListener("click", async () => {
-  downloadKittyUpdateBtn.disabled = true;
-  setSettingsStatus("Téléchargement de la mise à jour Kitty…");
+checkUpdatesBtn.addEventListener("click", async () => {
+  if (dependencyUpdatesBusy || backendConnection.kind !== "ready") return;
+  dependencyUpdatesBusy = true;
+  checkUpdatesBtn.disabled = true;
+  setSettingsStatus("Recherche des mises à jour des dépendances…");
   try {
-    const result = await nativeMessage({ action: "download_kitty_update" });
-    if (!result?.ok) {
-      const message = I18N.tr(result?.error || "Téléchargement de la mise à jour impossible");
-      const hint = result?.error_hint ? ` · ${I18N.tr(result.error_hint)}` : "";
-      throw new Error(message + hint);
-    }
-    downloadKittyUpdateBtn.textContent = `✓ ${I18N.tr("SHA-256 vérifié")}`;
-    setSettingsStatus(
-      `${I18N.tr("Archive de mise à jour téléchargée et SHA-256 vérifié.")} ${result.path || ""}`.trim(),
-      "success"
-    );
+    // Legacy compatible backends expose the dependency check in check_updates.
+    const result = await nativeMessage({ action: "check_updates" });
+    if (!result?.ok) throw new Error(result?.error || "Vérification des mises à jour impossible.");
+    await restoreDiagnostics(false);
+    const updates = result.updates || {};
+    if (updates.ok === false) throw new Error(updates.error || "Vérification des mises à jour impossible.");
+    setSettingsStatus(updates.updates_available > 0
+      ? `${updates.updates_available} mise(s) à jour disponible(s).`
+      : "Aucune mise à jour détectée avec les sources disponibles.", "success");
   } catch (err) {
     setSettingsStatus("Erreur : " + err.message, "error");
   } finally {
-    setTimeout(() => {
-      if (downloadKittyUpdateBtn) {
-        downloadKittyUpdateBtn.disabled = false;
-        downloadKittyUpdateBtn.textContent = I18N.tr("Télécharger la mise à jour");
-      }
-    }, 1200);
+    dependencyUpdatesBusy = false;
+    checkUpdatesBtn.disabled = backendConnection.kind !== "ready";
+  }
+});
+
+downloadBackendEl.addEventListener("click", async event => {
+  if (downloadBackendEl.getAttribute("aria-disabled") === "true" || backendDownloadBusy) {
+    event.preventDefault();
+    return;
+  }
+  if (downloadBackendEl.dataset.action !== "update") return;
+  event.preventDefault();
+  backendDownloadBusy = true;
+  renderBackendActions();
+  setSettingsStatus("Téléchargement de la mise à jour Kitty…");
+  try {
+    // The backend rechecks the current release, verifies its SHA-256 and never
+    // executes or installs the downloaded archive automatically.
+    const result = await nativeMessage({ action: "download_kitty_update" });
+    if (result?.release) backendReleaseReport = result.release;
+    if (!result?.ok) throw new Error(result?.error || "Téléchargement de la mise à jour impossible");
+    setSettingsStatus(`${I18N.tr("Archive téléchargée et SHA-256 vérifié. Lance ensuite l’installateur.")} ${result.path || ""}`.trim(), "success");
+  } catch (err) {
+    setSettingsStatus("Erreur : " + err.message, "error");
+  } finally {
+    backendDownloadBusy = false;
+    renderBackendActions();
   }
 });
 

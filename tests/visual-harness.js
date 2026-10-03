@@ -55,8 +55,14 @@ function popupState() {
         && doc.getElementById(button.getAttribute("aria-controls")) === section.querySelector(".settingsGroupBody");
     }),
     diagnosticText: text("diagnosticFacts"),
-    updateControlsInBackend: ["checkUpdates", "downloadKittyUpdate", "backendCompatibility", "backendReleaseState"]
-      .every(id => doc.getElementById(id)?.closest(".settingsCollapse")?.dataset.settingsSection === "backend"),
+    updateControlsInBackend: ["checkKittyUpdate", "downloadBackend"]
+      .every(id => doc.getElementById(id)?.closest(".settingsCollapse")?.dataset.settingsSection === "backend")
+      && doc.getElementById("checkUpdates")?.closest(".settingsCollapse")?.dataset.settingsSection === "dependencies",
+    backendDownloadText: text("downloadBackend"),
+    backendDownloadMode: doc.getElementById("downloadBackend")?.dataset.action,
+    backendCheckVisible: Boolean(doc.getElementById("checkKittyUpdate")?.getClientRects().length),
+    backendRetryVisible: Boolean(doc.getElementById("verifyBackend")?.getClientRects().length),
+    backendReleaseStatus: text("backendReleaseStatus"),
     pillMenuVisible: Boolean(doc.getElementById("pillStyleMenu")?.getClientRects().length),
     settingsSections: Object.fromEntries([...doc.querySelectorAll(".settingsCollapse")]
       .map(section => [section.dataset.settingsSection, !section.classList.contains("collapsed")])),

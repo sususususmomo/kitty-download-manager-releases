@@ -1361,9 +1361,15 @@
       margin-bottom: 8px;
       font-size: 11px;
     }
-    .backendFacts {
-      grid-template-columns: minmax(0, 1fr);
+    .backendReleaseStatus {
+      font-size: 11px;
+      line-height: 1.45;
+      margin-top: 8px;
+      color: #aaa;
     }
+    .backendReleaseStatus[hidden], #backendInstallInstruction[hidden],
+    #checkKittyUpdate[hidden], #verifyBackend[hidden] { display: none; }
+    .backendDownload[aria-disabled="true"] { opacity: .45; cursor: default; }
     .backendUpdateMark {
       min-width: 18px;
       height: 18px;
@@ -1664,24 +1670,13 @@
       <div id="settings-backend-body" class="settingsGroupBody">
         <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
         <div id="backendPlatform" class="settingsRowSub"></div>
-        <div class="settingsHint">Le backend s’installe sur ton ordinateur et effectue les téléchargements.</div>
+        <div id="backendReleaseStatus" class="backendReleaseStatus" role="status" aria-live="polite" hidden></div>
         <div class="backendButtons">
-          <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger</a>
-          <button id="verifyBackend" class="ghost" type="button">Vérifier la connexion</button>
+          <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger l’installateur</a>
+          <button id="checkKittyUpdate" class="ghost" type="button" hidden>Rechercher une mise à jour</button>
+          <button id="verifyBackend" class="ghost" type="button" hidden>Réessayer la connexion</button>
         </div>
-        <div id="backendInstallInstruction" class="settingsHint"></div>
-        <div class="settingsHint">Après l’installation, rouvre Kitty ou clique sur Vérifier la connexion.</div>
-        <div class="diagnosticFacts backendFacts">
-          <div class="diagnosticFact">Compatibilité : <strong id="backendCompatibility">Non vérifiée</strong></div>
-          <div class="diagnosticFact">Mise à jour Kitty : <strong id="backendReleaseState">Non vérifiée</strong></div>
-          <div class="diagnosticFact">Dernière release : <strong id="backendLatestRelease">—</strong></div>
-          <div class="diagnosticFact">Mises à jour des dépendances : <strong id="backendDependencyUpdates">non vérifiées</strong></div>
-        </div>
-        <div class="toolButtons">
-          <button id="checkUpdates" class="ghost" type="button">Vérifier les mises à jour</button>
-          <button id="downloadKittyUpdate" class="ghost" type="button" hidden>Télécharger la mise à jour</button>
-        </div>
-        <div class="settingsHint">« Vérifier les mises à jour » utilise le réseau uniquement quand tu le demandes pour comparer Kitty et les dépendances.</div>
+        <div id="backendInstallInstruction" class="settingsHint" hidden></div>
       </div>
     </div>
 
@@ -1798,6 +1793,9 @@
             <span class="dependencyValue">Lecture…</span>
           </div>
         </div>
+        <div id="dependencyUpdatesSummary" class="settingsHint" role="status" aria-live="polite">Mises à jour non vérifiées.</div>
+        <button id="checkUpdates" class="ghost" type="button">Rechercher les mises à jour des dépendances</button>
+        <div class="settingsHint">La recherche des mises à jour utilise le réseau uniquement quand tu le demandes. Elle n’installe rien automatiquement.</div>
         <div class="settingsHint">Python, yt-dlp, ffmpeg et ffprobe sont requis. Mutagen est recommandé pour l’intégration des pochettes.</div>
       </div>
     </div>
@@ -1809,6 +1807,7 @@
       </button>
       <div id="settings-diagnostic-body" class="settingsGroupBody">
         <div id="diagnosticFacts" class="diagnosticFacts">
+          <div class="diagnosticFact">Compatibilité : <strong>…</strong></div>
           <div class="diagnosticFact">Destination : <strong>…</strong></div>
           <div class="diagnosticFact">Espace libre : <strong>…</strong></div>
           <div class="diagnosticFact">Fichiers du backend : <strong>…</strong></div>
@@ -1846,7 +1845,7 @@
     </div>
 
     <div id="settingsStatus" role="status" aria-live="polite"></div>
-    <div class="settingsFooter">Kitty Download Manager · v8.33</div>
+    <div class="settingsFooter">Kitty Download Manager · v8.34</div>
   </div>
 
   <script src="i18n.js"></script>

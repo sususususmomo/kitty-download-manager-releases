@@ -173,6 +173,8 @@ def run():
     lock_file = root / "cache/queue.lock"
     seeded = False
     manifest_backup = None
+    release_cache = root / "cache/kitty-release-check.json"
+    original_release_cache = release_cache.read_bytes() if release_cache.exists() else None
     try:
         current = installer_support.current_install(root)
         if not current:
@@ -345,14 +347,14 @@ def run():
         for section in ("language", "destination", "pill"):
             command("click", selector=f'[data-settings-section="{section}"] .settingsGroupToggle')
         command("click", selector='[data-settings-section="diagnostic"] .settingsGroupToggle')
-        wait_state(lambda state: state.get("settingsSections", {}).get("diagnostic"))
+        wait_state(lambda state: state.get("settingsSections", {}).get("diagnostic") and state.get("diagnosticsBusy") is False and state.get("dependencyCount", 0) > 0)
         command("scroll", selector='[data-settings-section="diagnostic"]')
         capture("15-diagnostic", "Diagnostic — vérifications locales sans doublon de version ou mise à jour")
         facts = command("state").get("diagnosticText", "")
-        if any(label in facts for label in ("Compatibilité", "Version Kitty", "Dernière release", "Mises à jour")):
+        if any(label in facts for label in ("Version Kitty", "Dernière release", "Mises à jour")):
             raise RuntimeError(f"Informations backend dupliquées dans le diagnostic : {facts}")
         command("click", selector='[data-settings-section="diagnostic"] .settingsGroupToggle')
-        report["settings_validation"] = {"order": expected_sections, "collapsible": "ok", "aria": "ok", "persistence": "ok", "diagnostic_duplicates": "none"}
+        report["settings_validation"] = {"order": expected_sections, "collapsible": "ok", "aria": "ok", "persistence": "ok", "diagnostic_duplicates": "none", "compatibility_only_in_diagnostic": "ok"}
 
         command("click", selector='[data-settings-section="dependencies"] .settingsGroupToggle')
         wait_state(diagnostics_rendered, label="la fin du diagnostic, quel que soit son état de santé")
@@ -360,6 +362,37 @@ def run():
         command("scroll", selector='[data-settings-section="dependencies"]')
         capture("07-dependances", "Réglages — dépendances du backend")
         validate_capture_diagnostics(report["diagnostics"])
+        command("click", selector='[data-settings-section="dependencies"] .settingsGroupToggle')
+        command("click", selector='[data-settings-section="backend"] .settingsGroupToggle')
+        # Feed genuine native diagnostics a stale report from a pre-upgrade
+        # installation. This does not mock Firefox or the native host.
+        queue_store.atomic_json(release_cache, {"ok": True, "current_version": "8.16", "latest_version": "8.18", "state": "update_available", "update_available": True, "checked_at": time.time()})
+        command("click", selector="#backToMain")
+        command("click", selector="#openSettings")
+        older = wait_state(lambda state: "plus récente" in state.get("backendReleaseStatus", ""))
+        if older.get("backendDownloadVisible") or not older.get("backendCheckVisible"):
+            raise RuntimeError(f"Une ancienne release est proposée après l’upgrade : {older}")
+        command("scroll", selector='[data-settings-section="backend"]')
+        capture("16-cache-ancienne-release", "Backend — v8.18 en cache, version installée plus récente")
+        # A future-release example checks the single contextual download action
+        # only; the CI never downloads or executes this example archive.
+        suffix = "-macos" if sys.platform == "darwin" else "-windows-x64"
+        queue_store.atomic_json(release_cache, {"ok": True, "current_version": "8.31", "latest_version": "8.40", "state": "up_to_date", "update_available": False, "download_supported": True, "asset_sha256": "0" * 64, "asset_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.40/kitty-download-manager-v8.40{suffix}.zip", "checked_at": time.time()})
+        command("click", selector="#backToMain")
+        command("click", selector="#openSettings")
+        newer = wait_state(lambda state: state.get("backendDownloadVisible") and "8.40" in state.get("backendDownloadText", ""))
+        if newer.get("backendCheckVisible") or newer.get("backendRetryVisible") or newer.get("backendDownloadMode") != "update":
+            raise RuntimeError(f"Actions backend redondantes : {newer}")
+        command("scroll", selector='[data-settings-section="backend"]')
+        capture("17-cache-nouvelle-release", "Backend — exemple de nouvelle version, un seul téléchargement")
+        release_cache.unlink(missing_ok=True)
+        command("click", selector="#backToMain")
+        command("click", selector="#openSettings")
+        wait_state(lambda state: state.get("backendCheckVisible") and not state.get("backendDownloadVisible"))
+        capture("18-backend-connecte-francais", "Backend connecté — recherche de mise à jour uniquement")
+        command("click", selector='[data-settings-section="backend"] .settingsGroupToggle')
+        report["backend_actions"] = {"old_cache_recomputed": "ok", "single_download": "ok", "healthy_state": "ok", "update_examples_only": True}
+
         # Exercise the real Firefox extension without its native host, then
         # restore registration and retry without reloading the extension.
         command("close")
@@ -385,8 +418,8 @@ def run():
         capture("10-installation-english", "Backend setup — English")
         manifest_backup.rename(manifest)
         manifest_backup = None
-        command("click", selector="#verifyBackend")
         wait_state(lambda state: state.get("backendState") == "ready" and state.get("downloadEnabled"), label="connexion rétablie sans recharger l’extension")
+        command("scroll", bottom=False)
         capture("11-backend-connecte", "Backend installé — connexion rétablie")
         report["bootstrap"] = {"without_native": "ok", "platform_download": "ok", "english": "ok", "reconnection": "ok"}
         report["status"] = "réussi"
@@ -404,6 +437,10 @@ def run():
             except Exception:
                 pass
     finally:
+        if original_release_cache is None:
+            release_cache.unlink(missing_ok=True)
+        else:
+            installer_support.atomic_bytes(release_cache, original_release_cache)
         if manifest_backup and manifest_backup.exists():
             manifest_backup.rename(native_manifest_path())
         if driver:

@@ -2308,6 +2308,7 @@ def test_popup_ui_smoke_in_real_browser():
                 "section Cookies non dépliable",
             )
 
+            page.locator('[data-settings-section="pill"] .settingsGroupToggle').click()
             page.locator("#pillStyleButton").click()
             check(page.locator("#pillStyleMenu").is_visible(), "menu Style du pill non cliquable")
 
@@ -2329,15 +2330,14 @@ def test_update_diagnostic_ui_contract():
     shared = (EXT / "shared.js").read_text(encoding="utf-8")
     background = (EXT / "background.js").read_text(encoding="utf-8")
 
-    for element_id in ("backendUpdateMark", "checkUpdates", "downloadKittyUpdate"):
+    for element_id in ("backendUpdateMark", "checkUpdates", "checkKittyUpdate", "downloadBackend"):
         check(f'id="{element_id}"' in html, f"UI update absente: {element_id}")
-    check("backendUpdateMark.review" in html, "style update potentiellement incompatible absent")
     check("backendUpdateMark.incompatible" in html, "style mismatch frontend/backend absent")
-    check("renderBackendUpdateMark" in js, "renderer icône update absent")
+    check("renderBackendActions" in js, "renderer icône update absent")
     check('nativeMessage({ action: "check_updates" })' in js, "bouton check_updates non branché")
     check('nativeMessage({ action: "download_kitty_update" })' in js, "bouton download update non branché")
-    check("SHA-256" in js and "Télécharger la mise à jour" in html, "UI vérification SHA-256 absente")
-    check("Vérifier les mises à jour" in html, "libellé check update absent")
+    check("SHA-256" in js and "Télécharger l’installateur" in html, "UI vérification SHA-256 absente")
+    check("Rechercher les mises à jour des dépendances" in html, "libellé check update absent")
     check("utilise le réseau uniquement quand tu le demandes" in html, "confidentialité réseau non explicitée")
     check("NATIVE_PROTOCOL_VERSION = 1" in shared, "protocole frontend absent")
     check("ensureNativeCompatibility" in js, "handshake popup absent")

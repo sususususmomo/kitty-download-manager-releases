@@ -2,6 +2,20 @@
   const VALID_LANGUAGES = new Set(["fr", "en"]);
   const FR_EN = Object.freeze(
 {
+  "Télécharger l’installateur": "Download installer",
+  "Rechercher une mise à jour": "Check for a backend update",
+  "Réessayer la connexion": "Retry connection",
+  "Recherche…": "Checking…",
+  "Recherche des mises à jour des dépendances…": "Checking dependency updates…",
+  "Rechercher les mises à jour des dépendances": "Check dependency updates",
+  "Version installée plus récente que la release publique": "Installed version is newer than the public release",
+  "La recherche de mise à jour a échoué. Réessaie.": "Update check failed. Try again.",
+  "Le backend est à jour.": "The backend is up to date.",
+  "Version de release invalide.": "Invalid release version.",
+  "Archive de mise à jour indisponible pour ce système.": "Update archive is unavailable for this system.",
+  "Mises à jour non vérifiées.": "Updates not checked.",
+  "Archive téléchargée et SHA-256 vérifié. Lance ensuite l’installateur.": "Archive downloaded and SHA-256 verified. Now run the installer.",
+  "La recherche des mises à jour utilise le réseau uniquement quand tu le demandes. Elle n’installe rien automatiquement.": "Update checks use the network only when you ask. Nothing is installed automatically.",
   "Lancer le diagnostic": "Run diagnostics",
   "Fichiers du backend :": "Backend files:",
   "Mise à jour Kitty :": "Kitty update:",
