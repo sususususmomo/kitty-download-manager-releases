@@ -1,0 +1,44 @@
+name: Kitty Windows validation
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - run: python -m pip install psutil
+      - name: Portable tests and actual Windows processes
+        run: python tests/test-windows-port.py
+      - name: Parse PowerShell installer
+        shell: powershell
+        run: |
+          $tokens=$null; $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'Install.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+      - name: Full online installation and Native Messaging launcher
+        shell: powershell
+        run: |
+          & .\Install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:KITTY_INSTALLED_TEST='1'
+          python tests/test-installed-windows.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  linux-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: bash test.sh
+      - run: python tests/test-windows-port.py
