@@ -94,7 +94,7 @@ sur un bureau Windows 10/11. Les versions Firefox et geckodriver sont inscrites
 dans le rapport. Les tests d’installation existants ont leur propre job.
 
 
-### Attente des diagnostics (V8.29)
+### Attente des diagnostics (V8.30)
 
 Le pilote attend la fin de la requête et le rendu d’une liste dans le groupe
 ouvert, puis accepte les trois états terminaux : prêt, avertissement et erreur.

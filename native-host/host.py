@@ -17,11 +17,13 @@ import time
 import uuid
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 NATIVE_DIR = Path(__file__).resolve().parent
 if str(NATIVE_DIR) not in sys.path:
     sys.path.insert(0, str(NATIVE_DIR))
+
+from platform_support import open_url as urlopen
 
 from app_paths import (
     APP_NAME,
@@ -31,7 +33,7 @@ from app_paths import (
     install_dir,
     migration_file,
 )
-from platform_support import (WINDOWS, process_alive, script_process_matches, spawn_options,
+from platform_support import (WINDOWS, MACOS, process_args, same_path, choose_macos_folder, open_macos_path, process_alive, script_process_matches, spawn_options,
                               run_hidden, find_firefox, firefox_uses_profile, choose_windows_folder,
                               configure_worker_job, watch_worker_controls, maintenance_active)
 from errors import normalize_error_payload
@@ -71,7 +73,7 @@ DEFAULT_OUTPUT_DIR = default_output_dir()
 DOWNLOADS_DIR = DEFAULT_OUTPUT_DIR.parent
 
 STATE_BACKUP_DIR = CACHE_DIR / "state-backups"
-APP_VERSION = "8.29"
+APP_VERSION = "8.30"
 UPDATE_CACHE_FILE = CACHE_DIR / "update-check.json"
 KITTY_RELEASE_CACHE_FILE = CACHE_DIR / "kitty-release-check.json"
 UPDATE_BACKUP_DIR = CACHE_DIR / "update-backups"
@@ -418,7 +420,7 @@ def _firefox_process_matches_session(pid, profile):
     réutilisé, process auxiliaire, etc.). Sous Linux on exige que cmdline
     contienne le chemin exact du profil jetable.
     """
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return firefox_uses_profile(profile) and process_alive(pid)
 
     if not process_alive(pid):
@@ -523,7 +525,7 @@ def _youtube_auth_browser_running(pending):
     paths = _validate_youtube_session(pending["token"], require_exists=True)
     profile = paths["profile"]
 
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return firefox_uses_profile(profile)
 
     # Linux : ne jamais bloquer uniquement à cause d'un lock de profil stale.
@@ -683,10 +685,10 @@ def youtube_auth_enabled():
 
 
 def youtube_auth_start():
-    if not sys.platform.startswith("linux"):
+    if not (sys.platform.startswith("linux") or MACOS):
         return {
             "ok": False,
-            "error": "La configuration automatique de la session YouTube est actuellement disponible sous Linux.",
+            "error": "La configuration automatique de la session YouTube est disponible sous Linux et macOS.",
         }
 
     pending = _youtube_pending_load()
@@ -980,9 +982,9 @@ def youtube_auth_for_url(url):
 def choose_output_dir():
     current = get_output_dir()
     current.mkdir(parents=True, exist_ok=True)
-    if WINDOWS:
+    if WINDOWS or MACOS:
         try:
-            selected = choose_windows_folder(current)
+            selected = choose_macos_folder(current) if MACOS else choose_windows_folder(current)
             return set_output_dir(selected) if selected else {"ok": True, "cancelled": True, "output_dir": str(current)}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -1087,7 +1089,7 @@ def choose_output_dir():
 
 
 def worker_matches_job(pid, job_id):
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return script_process_matches(pid, WORKER, job_id)
     if not process_alive(pid):
         return False
@@ -1108,7 +1110,7 @@ def worker_matches_job(pid, job_id):
 
 def with_state(fn):
     def guarded(data):
-        if WINDOWS and maintenance_active(CACHE_DIR / "maintenance.json"):
+        if (WINDOWS or MACOS) and maintenance_active(CACHE_DIR / "maintenance.json"):
             raise QueueStateError("Installation ou désinstallation Kitty en cours; file en pause.")
         return fn(data)
     return mutate_state(QUEUE_FILE, LOCK_FILE, guarded, recover=True,
@@ -1144,7 +1146,7 @@ def _mutate_job_by_id(job_id, fn):
 
 
 def metadata_process_matches_job(pid, job_id):
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return script_process_matches(pid, META_WORKER, job_id)
     if not pid or not process_alive(pid):
         return False
@@ -2184,6 +2186,8 @@ def remove_queued(job_id):
     return {"ok": True, "state": snapshot()}
 
 def repair_state():
+    if (WINDOWS or MACOS) and maintenance_active(CACHE_DIR / "maintenance.json"):
+        return read_state(QUEUE_FILE, LOCK_FILE)
     """Validate/migrate state and recover active jobs that cannot be real."""
     should_start_next = {"value": False}
     metadata_to_restart = []
@@ -2324,6 +2328,12 @@ def open_folder():
     output_dir = get_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
     folder = str(output_dir)
+    if MACOS:
+        try:
+            open_macos_path(folder)
+            return {"ok": True, "opener": "Finder"}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
     if WINDOWS:
         try:
             os.startfile(folder)
@@ -2510,9 +2520,9 @@ def dependency_status():
         _command_probe("ffprobe", ["-version"], required=True),
         _python_module_probe("mutagen", "mutagen", "Mutagen", required=False),
     ]
-    if WINDOWS:
+    if WINDOWS or MACOS:
         deps.extend([
-            _python_module_probe("psutil", "psutil", "Support Windows", required=True),
+            _python_module_probe("psutil", "psutil", "Support des processus", required=True),
             _command_probe("deno", ["--version"], required=True),
         ])
 
@@ -2563,7 +2573,7 @@ def _parse_package_manager_updates():
     temporary location. Other package managers use their current local cache;
     the UI labels that limitation instead of pretending the result is fresh.
     """
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return {}, "indisponible", False, False
 
     updates = {}
@@ -2747,7 +2757,7 @@ def check_kitty_release(save_cache=True, timeout=10):
             raise RuntimeError("Réponse GitHub invalide.")
 
         latest = _normalize_release_version(data.get("tag_name"))
-        suffix = "-windows-x64" if WINDOWS else ""
+        suffix = "-macos" if MACOS else ("-windows-x64" if WINDOWS else "")
         expected_name = f"kitty-download-manager-v{latest}{suffix}.zip"
         assets = data.get("assets") if isinstance(data.get("assets"), list) else []
         asset = next(
@@ -3625,6 +3635,12 @@ def open_logs():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     LOG_FILE.touch(exist_ok=True)
     path = str(LOG_FILE)
+    if MACOS:
+        try:
+            open_macos_path(path)
+            return {"ok": True, "log_path": path, "opener": "macOS"}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
     if WINDOWS:
         try:
             os.startfile(path)
@@ -3681,13 +3697,15 @@ def open_logs():
 
 
 def _signal_worker_for_reset(active):
-    if WINDOWS:
+    if WINDOWS or MACOS:
         pid = active.get("worker_pid")
         if not pid or not process_alive(pid):
             return
         if not worker_matches_job(pid, active.get("id")):
             raise RuntimeError("Identité du worker non vérifiée; remise à zéro annulée.")
         set_control(active.get("id"), "cancel")
+        if MACOS:
+            os.kill(int(pid), signal.SIGTERM)
         deadline = time.monotonic() + 35
         while process_alive(pid) and time.monotonic() < deadline:
             time.sleep(0.1)

@@ -14,7 +14,7 @@ if str(NATIVE_DIR) not in sys.path:
     sys.path.insert(0, str(NATIVE_DIR))
 
 from app_paths import cache_dir, config_dir, default_output_dir, install_dir
-from platform_support import (WINDOWS, process_alive, script_process_matches, spawn_options,
+from platform_support import (WINDOWS, MACOS, terminate_own_children, process_alive, script_process_matches, spawn_options,
                               run_hidden, find_firefox, firefox_uses_profile, choose_windows_folder,
                               configure_worker_job, watch_worker_controls)
 from errors import classify_backend_error
@@ -894,7 +894,7 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
 def main():
     global current_job_id
 
-    log(f"worker V8.29 lancé pid={os.getpid()} argv={sys.argv[1:]}")
+    log(f"worker V8.30 lancé pid={os.getpid()} argv={sys.argv[1:]}")
     if len(sys.argv) != 2:
         return 2
 
@@ -1183,6 +1183,8 @@ def main():
     finally:
         if control_watcher is not None:
             control_watcher.set()
+        if MACOS:
+            terminate_own_children()
         cleanup_youtube_job_cookiefile(job_cookiefile)
 
 if __name__ == "__main__":

@@ -11,7 +11,19 @@ import sys
 import time
 
 WINDOWS = sys.platform == "win32"
+MACOS = sys.platform == "darwin"
 _worker_job_handle = None
+
+
+def open_url(request, **kwargs):
+    from urllib.request import urlopen
+    if MACOS and "context" not in kwargs:
+        # The private CPython/OpenSSL does not use Apple's Keychain directly.
+        # yt-dlp[default] installs certifi alongside the private runtime.
+        import ssl
+        import certifi
+        kwargs["context"] = ssl.create_default_context(cafile=certifi.where())
+    return urlopen(request, **kwargs)
 
 
 def acquire_file_lock(handle):
@@ -51,6 +63,10 @@ def process_alive(pid):
         if WINDOWS:
             import psutil
             return psutil.pid_exists(pid) and psutil.Process(pid).is_running()
+        if MACOS:
+            import psutil
+            proc = psutil.Process(pid)
+            return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
         os.kill(pid, 0)
         return True
     except (OSError, ValueError, TypeError):
@@ -61,7 +77,7 @@ def process_alive(pid):
 
 def process_args(pid):
     try:
-        if WINDOWS:
+        if WINDOWS or MACOS:
             import psutil
             return psutil.Process(int(pid)).cmdline()
         raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
@@ -71,6 +87,11 @@ def process_args(pid):
 
 
 def same_path(left, right):
+    if MACOS:
+        try:
+            return os.path.samefile(left, right)
+        except OSError:
+            pass
     return os.path.normcase(os.path.abspath(str(left))) == os.path.normcase(os.path.abspath(str(right)))
 
 
@@ -126,6 +147,12 @@ def windows_downloads_dir():
 
 
 def find_firefox():
+    if MACOS:
+        for base in (Path("/Applications"), Path.home() / "Applications"):
+            for name in ("Firefox.app", "Firefox Developer Edition.app", "Firefox Nightly.app"):
+                candidate = base / name / "Contents/MacOS/firefox"
+                if candidate.is_file():
+                    return str(candidate)
     for name in ("firefox", "firefox-esr", "firefox-bin"):
         found = shutil.which(name)
         if found:
@@ -154,13 +181,13 @@ def find_firefox():
 
 
 def firefox_uses_profile(profile):
-    if not WINDOWS:
+    if not (WINDOWS or MACOS):
         return False
     import psutil
     for proc in psutil.process_iter(["name", "cmdline"]):
         try:
             args = proc.info["cmdline"] or []
-            if str(proc.info["name"] or "").lower() != "firefox.exe":
+            if str(proc.info["name"] or "").lower() not in ("firefox.exe", "firefox", "firefox-bin"):
                 continue
             for i, arg in enumerate(args[:-1]):
                 if arg.lower() in ("-profile", "--profile") and same_path(args[i + 1], profile):
@@ -168,6 +195,30 @@ def firefox_uses_profile(profile):
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return False
+
+
+def choose_macos_folder(current):
+    # Arguments are data, never interpolated into AppleScript source.
+    script = '''on run argv
+try
+ set chosen to choose folder with prompt "Kitty Download Manager — dossier de destination" default location (POSIX file (item 1 of argv))
+ return POSIX path of chosen
+on error number -128
+ return ""
+end try
+end run'''
+    result = run_hidden(["/usr/bin/osascript", "-e", script, str(current)],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "Sélecteur macOS indisponible.")
+    return result.stdout.rstrip("\r\n")
+
+
+def open_macos_path(path):
+    result = run_hidden(["/usr/bin/open", str(path)], stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, text=True, timeout=15)
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "Ouverture macOS impossible.")
 
 
 def choose_windows_folder(current):
@@ -239,12 +290,13 @@ def terminate_own_children():
     import psutil
     # A successor worker can already have been launched. Never terminate Python
     # children; only the external tools belonging to this runtime are stopped.
-    bin_dir = Path(sys.executable).resolve().parent.parent / "bin"
+    bin_dir = (Path(__file__).resolve().parent.parent / "bin" if MACOS else
+               Path(sys.executable).resolve().parent.parent / "bin")
     children = []
     for child in psutil.Process().children(recursive=True):
         try:
             executable = Path(child.exe())
-            if executable.name.lower() in ("ffmpeg.exe", "ffprobe.exe", "deno.exe") and same_path(executable.parent, bin_dir):
+            if executable.name.lower() in ("ffmpeg.exe", "ffprobe.exe", "deno.exe", "ffmpeg", "ffprobe", "deno") and same_path(executable.parent, bin_dir):
                 children.append(child)
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass

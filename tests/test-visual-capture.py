@@ -10,6 +10,13 @@ spec.loader.exec_module(capture)
 
 
 class CaptureDiagnosticTests(unittest.TestCase):
+    def test_settings_wait_accepts_absolute_mac_and_windows_destinations(self):
+        for destination in ("/Users/runner/Downloads/kitty-download-manager", r"C:\Users\runner\Downloads", r"\\server\share\downloads"):
+            self.assertTrue(capture.settings_rendered({"settings": True, "destination": destination}))
+        for state in ({"settings": False, "destination": "/Users/runner"},
+                      {"settings": True, "destination": ""}, {"settings": True, "destination": "Chargement…"}):
+            self.assertFalse(capture.settings_rendered(state))
+
     def state(self, phase):
         return {"open": True, "ready": True, "settings": True,
                 "settingsSections": {"dependencies": True}, "diagnosticsBusy": False,

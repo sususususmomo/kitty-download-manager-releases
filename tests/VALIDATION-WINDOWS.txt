@@ -1,11 +1,11 @@
-Kitty Download Manager V8.29 — correction des captures Firefox Windows
+Kitty Download Manager V8.30 — correction des captures Firefox Windows
 
 Résultat distant V8.28 fourni par l'utilisateur :
 - Six PNG produits dans la vraie popup Firefox sous Windows.
 - Timeout sur la septième capture : l'attente exigeait dependencyReady.
 - Le journal ne contient pas l'état terminal exact du diagnostic.
 
-Correction V8.29 :
+Correction V8.30 :
 - Attente de la fin de la requête et d'une liste rendue dans le groupe ouvert.
 - Les états prêt, avertissement et erreur sont tous capturés.
 - Diagnostic natif complet conservé dans rapport.json et état de santé visible
@@ -15,7 +15,7 @@ Correction V8.29 :
 - Dernier état de la popup et détails des dépendances joints au rapport et au
   journal en cas d'échec; sorties CLI UTF-8.
 
-Validation locale V8.29 :
+Validation locale V8.30 :
 - 5 tests de régression des captures réussis, sans Selenium ni Windows.
 - 94 régressions générales réussies, 0 échec, 5 visuels Chromium ignorés.
 - 28 tests portables réussis, 4 nécessitant Windows ignorés.
@@ -28,13 +28,13 @@ Validation locale V8.29 :
   de pilotage du XPI distribué vérifiées.
 
 Limites :
-- Le nouveau passage V8.29 sur GitHub Actions reste à lancer.
+- Le nouveau passage V8.30 sur GitHub Actions reste à lancer.
 - Aucune nouvelle capture Windows n'a été produite localement.
 - Les six captures V8.28 déjà produites sont récupérables dans l'artefact du
   lancement échoué grâce à l'upload always().
 - Le XPI distribué reste non signé. La version Linux V8.24 séparée est intacte.
 
-Tests des captures V8.29 :
+Tests des captures V8.30 :
 
 test_finished_warning_and_error_do_not_wait_for_green (__main__.CaptureDiagnosticTests.test_finished_warning_and_error_do_not_wait_for_green) ... ok
 test_new_destination_error_does_not_invalidate_captured_ui (__main__.CaptureDiagnosticTests.test_new_destination_error_does_not_invalidate_captured_ui) ... ok
@@ -47,7 +47,7 @@ Ran 5 tests in 0.000s
 
 OK
 
-Régressions V8.29 :
+Régressions V8.30 :
 
 Kitty Download Manager — tests de régression
 Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
@@ -154,7 +154,7 @@ Projet : /workspace/scratch/2981e6fc1a09/windows/kitty-download-manager
 
 Résultat : 94 OK, 0 échec(s), 5 ignoré(s)
 
-Tests portables V8.29 :
+Tests portables V8.30 :
 
 test_bad_hash_is_removed (__main__.InstallerTests.test_bad_hash_is_removed) ... ok
 test_download_verifies_size_and_sha256 (__main__.InstallerTests.test_download_verifies_size_and_sha256) ... ok

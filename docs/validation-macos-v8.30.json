@@ -1,0 +1,32 @@
+{
+  "version": "8.30",
+  "platform": "macos",
+  "architectures": [
+    "Intel x86_64",
+    "Apple Silicon arm64"
+  ],
+  "local_system": "Linux",
+  "native_macos_validation": "À lancer dans GitHub Actions",
+  "local_tests": {
+    "regression_passed": 94,
+    "regression_skipped": 5,
+    "macos_port_passed": 10,
+    "macos_port_skipped": 1,
+    "windows_port_passed": 28,
+    "windows_port_skipped": 4,
+    "capture_policy_passed": 6
+  },
+  "checks": [
+    "Syntaxe Python et JavaScript",
+    "Syntaxe bash",
+    "Workflows YAML",
+    "Sommes de contrôle Python Intel et Apple Silicon",
+    "Sommes de contrôle FFmpeg / ffprobe Intel et Apple Silicon"
+  ],
+  "limitations": [
+    "Les tests réels macOS et les captures Firefox exigent les runners GitHub Actions.",
+    "Les captures stabilisées ne mesurent pas les flashs brefs.",
+    "Le XPI est non signé.",
+    "Install.command est un installateur Terminal, pas un PKG Apple signé/notarié."
+  ]
+}

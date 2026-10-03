@@ -46,7 +46,7 @@ try {
     $packages = Join-Path $stage 'packages'
     New-Item -ItemType Directory -Path $runtime, $packages | Out-Null
 
-    Write-Host 'Kitty Download Manager V8.29 - Windows x64'
+    Write-Host 'Kitty Download Manager V8.30 - Windows x64'
     Write-Host 'Preparation de Python prive (aucune installation systeme requise)...'
     $pythonZip = Join-Path $stage 'python.zip'
     # Official Python 3.13.16 release manifest, checked on 2026-10-03.

@@ -47,7 +47,7 @@ class InstallerTests(unittest.TestCase):
     def stage(self):
         stage = self.root / ("stage-" + "a" * 32)
         (stage / "extension").mkdir(parents=True)
-        (stage / "extension/manifest.json").write_text('{"version":"8.29"}', encoding="utf-8")
+        (stage / "extension/manifest.json").write_text('{"version":"8.30"}', encoding="utf-8")
         return stage
 
     def old_install(self):
@@ -61,7 +61,7 @@ class InstallerTests(unittest.TestCase):
             path.write_bytes(b"conserver")
 
     def test_publish_uses_stable_manifest_and_private_runtime(self):
-        version = installer.commit_install(self.root, self.stage(), "8.29", register_host=False)
+        version = installer.commit_install(self.root, self.stage(), "8.30", register_host=False)
         manifest = json.loads((self.root / f"{installer.HOST_NAME}.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["allowed_extensions"], ["kitty-download-manager@local"])
         self.assertEqual(manifest["path"], str(self.root / "native-host.bat"))
@@ -81,7 +81,7 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "register", side_effect=OSError("registre inaccessible")), \
              patch.object(installer, "restore_registry") as restore:
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, self.stage(), "8.29")
+                installer.commit_install(self.root, self.stage(), "8.30")
             restore.assert_called_once_with(["snapshot"])
         for name, content in originals.items():
             self.assertEqual((self.root / name).read_bytes(), content)
@@ -141,7 +141,7 @@ class InstallerTests(unittest.TestCase):
     def test_validation_after_move_fails_without_replacing_old_install(self):
         self.old_install()
         with self.assertRaises(RuntimeError):
-            installer.commit_install(self.root, self.stage(), "8.29", register_host=False,
+            installer.commit_install(self.root, self.stage(), "8.30", register_host=False,
                                      validate=lambda _path: (_ for _ in ()).throw(RuntimeError("backend casse")))
         self.assertEqual((self.root / "extension/manifest.json").read_text(), "ancien")
         self.assertEqual((self.root / "current.json").read_bytes(), b"ancien:current.json")
@@ -154,12 +154,12 @@ class InstallerTests(unittest.TestCase):
             raise OSError("disque plein")
         with patch.object(installer.shutil, "copytree", side_effect=broken_copy):
             with self.assertRaises(OSError):
-                installer.commit_install(self.root, stage, "8.29", register_host=False)
+                installer.commit_install(self.root, stage, "8.30", register_host=False)
         self.assertFalse((self.root / "extension").exists())
         self.assertFalse((self.root / "current.json").exists())
 
     def test_paths_in_metadata_cannot_escape_runtime_versions(self):
-        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.29", "versions/8.29-" + "x" * 32):
+        for path in ("../other", "versions/../other", "C:/Users/else", "versions/8.30", "versions/8.30-" + "x" * 32):
             with self.subTest(path=path), self.assertRaises(RuntimeError):
                 installer.checked_version_path(self.root, {"directory": path})
 
@@ -191,7 +191,7 @@ class InstallerTests(unittest.TestCase):
             installer.safe_extract(archive, self.root / "output")
 
     def download(self, payload, digest, size):
-        with patch.object(installer, "urlopen", return_value=io.BytesIO(payload)):
+        with patch("installer_support.urlopen", return_value=io.BytesIO(payload)):
             return installer.verified_download("https://example.com/file", self.root / "download.zip", digest, size)
 
     def test_download_verifies_size_and_sha256(self):
@@ -210,7 +210,7 @@ class InstallerTests(unittest.TestCase):
             self.assertFalse((self.root / "download.zip").exists())
 
     def test_insecure_url_is_rejected_before_network(self):
-        with patch.object(installer, "urlopen", side_effect=AssertionError("reseau")):
+        with patch("installer_support.urlopen", side_effect=AssertionError("reseau")):
             with self.assertRaises(RuntimeError):
                 installer.verified_download("http://example.com/file", self.root / "download.zip", "0" * 64)
 
@@ -340,9 +340,9 @@ class InstallerTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("windows_asset_test", NATIVE / "host.py")
         host = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(host)
-        version = "8.30"
+        version = "8.31"
         linux = {"name": f"kitty-download-manager-v{version}.zip", "digest": "sha256:" + "a" * 64,
-                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.30/file.zip"}
+                 "size": 10, "browser_download_url": "https://github.com/repo/releases/download/v8.31/file.zip"}
         windows = dict(linux, name=f"kitty-download-manager-v{version}-windows-x64.zip")
         payload = {"tag_name": "v" + version, "assets": [linux, windows]}
         with patch.object(host, "WINDOWS", True), patch.object(host, "urlopen", return_value=io.BytesIO(json.dumps(payload).encode())):

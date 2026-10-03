@@ -5,6 +5,10 @@ import os
 import sys
 
 WINDOWS = sys.platform == "win32"
+MACOS = sys.platform == "darwin"
+
+def macos_root():
+    return Path.home() / "Library" / "Application Support" / "KittyDownloadManager"
 
 def windows_root():
     return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "KittyDownloadManager"
@@ -20,7 +24,7 @@ LEGACY_NATIVE_HOST_NAME = "com.example.ytdlp_downloader"
 
 
 def install_dir():
-    if WINDOWS:
+    if WINDOWS or MACOS:
         return Path(__file__).resolve().parent
     return Path.home() / ".local" / "lib" / APP_SLUG
 
@@ -28,12 +32,16 @@ def install_dir():
 def config_dir():
     if WINDOWS:
         return windows_root() / "config"
+    if MACOS:
+        return macos_root() / "config"
     return Path.home() / ".config" / APP_SLUG
 
 
 def cache_dir():
     if WINDOWS:
         return windows_root() / "cache"
+    if MACOS:
+        return macos_root() / "cache"
     return Path.home() / ".cache" / APP_SLUG
 
 
@@ -47,6 +55,8 @@ def default_output_dir():
 def native_manifest_dir():
     if WINDOWS:
         return windows_root()
+    if MACOS:
+        return Path.home() / "Library/Application Support/Mozilla/NativeMessagingHosts"
     return Path.home() / ".mozilla" / "native-messaging-hosts"
 
 
