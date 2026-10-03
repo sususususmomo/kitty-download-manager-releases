@@ -1,0 +1,92 @@
+name: Kitty macOS validation
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'macos-test-*'
+      - 'frontend-test-*'
+  pull_request:
+jobs:
+  macos:
+    name: macOS ${{ matrix.label }} — installation et Firefox
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            label: Intel
+            python-arch: x64
+          - runner: macos-15
+            label: Apple-Silicon
+            python-arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python-arch }}
+      - name: Install test dependencies
+        run: python -m pip install psutil selenium==4.50.0
+      - name: Portable macOS and capture regressions
+        run: |
+          bash -n Install.command Uninstall.command
+          python tests/test-macos-port.py
+          python tests/test-visual-capture.py
+      - name: Full macOS installation with private Python
+        env:
+          KITTY_INSTALL_TRACEBACK: '1'
+        run: python tools/install-backend-for-ci.py
+      - name: Install Firefox from Mozilla
+        run: |
+          mkdir -p artifacts/macos-firefox "$HOME/Applications"
+          curl --fail --location --proto '=https' --proto-redir '=https' --retry 2 \
+            'https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=fr' \
+            -o "$RUNNER_TEMP/kitty-firefox.dmg"
+          mount="$RUNNER_TEMP/kitty-firefox-mount"
+          mkdir "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$RUNNER_TEMP/kitty-firefox.dmg"
+          trap 'hdiutil detach "$mount"' EXIT
+          codesign --verify --deep --strict "$mount/Firefox.app"
+          codesign -dv --verbose=4 "$mount/Firefox.app" 2>&1 | grep -F 'Authority=Developer ID Application: Mozilla Corporation'
+          ditto "$mount/Firefox.app" "$HOME/Applications/Firefox.app"
+          echo "KITTY_FIREFOX_BINARY=$HOME/Applications/Firefox.app/Contents/MacOS/firefox" >> "$GITHUB_ENV"
+      - name: Capture the actual Firefox toolbar popup
+        env:
+          KITTY_VISUAL_TEST: '1'
+          SE_SKIP_DRIVER_IN_PATH: 'true'
+          SE_AVOID_STATS: 'true'
+          MOZ_HEADLESS_WIDTH: '1100'
+          MOZ_HEADLESS_HEIGHT: '800'
+        run: python tests/capture-macos-firefox.py
+      - name: Installed launcher, upgrade, offline audio and uninstall
+        env:
+          KITTY_MACOS_INSTALLED_TEST: '1'
+        run: python tests/test-installed-macos.py
+      - name: Downloadable screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kitty-macos-${{ matrix.label }}-firefox-captures
+          path: artifacts/macos-firefox/
+          if-no-files-found: warn
+          retention-days: 14
+  linux-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: python -m pip install psutil
+      - run: bash test.sh
+      - run: node tests/test-backend-bootstrap.js
+      - run: python tests/test-backend-packaging.py
+      - run: python tests/test-macos-port.py
+      - run: python tests/test-windows-port.py
+      - run: python tests/test-visual-capture.py
