@@ -1,4 +1,4 @@
-name: Kitty backend downloads
+name: Kitty publication checks
 on:
   workflow_dispatch:
   push:
@@ -18,3 +18,15 @@ jobs:
         with:
           python-version: '3.13'
       - run: python tests/check-backend-downloads.py
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Mozilla add-on validator
+        run: npx --yes web-ext@10.6.0 lint --source-dir extension --output json > amo-lint.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: kitty-amo-lint
+          path: amo-lint.json
+          if-no-files-found: warn
