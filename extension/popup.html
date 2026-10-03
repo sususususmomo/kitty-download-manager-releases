@@ -1361,6 +1361,9 @@
       margin-bottom: 8px;
       font-size: 11px;
     }
+    .backendFacts {
+      grid-template-columns: minmax(0, 1fr);
+    }
     .backendUpdateMark {
       min-width: 18px;
       height: 18px;
@@ -1668,7 +1671,7 @@
         </div>
         <div id="backendInstallInstruction" class="settingsHint"></div>
         <div class="settingsHint">Après l’installation, rouvre Kitty ou clique sur Vérifier la connexion.</div>
-        <div class="diagnosticFacts">
+        <div class="diagnosticFacts backendFacts">
           <div class="diagnosticFact">Compatibilité : <strong id="backendCompatibility">Non vérifiée</strong></div>
           <div class="diagnosticFact">Mise à jour Kitty : <strong id="backendReleaseState">Non vérifiée</strong></div>
           <div class="diagnosticFact">Dernière release : <strong id="backendLatestRelease">—</strong></div>
