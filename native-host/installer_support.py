@@ -56,7 +56,7 @@ def verified_download(url, destination, digest, expected_size=None):
     total = 0
     hasher = hashlib.sha256()
     try:
-        request = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; KittyDownloadManager/8.30)"})
+        request = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; KittyDownloadManager/8.31)"})
         with urlopen(request, timeout=90) as response, destination.open("xb") as out:
             while True:
                 block = response.read(256 * 1024)

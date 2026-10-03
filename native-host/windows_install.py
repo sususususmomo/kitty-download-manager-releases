@@ -40,7 +40,7 @@ def app_root():
 
 def github_binary(repo, asset_name, stage, executable_names):
     url = f"https://api.github.com/repos/{repo}/releases/latest"
-    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.30",
+    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.31",
                                    "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
         release = json.loads(response.read(4_000_000))

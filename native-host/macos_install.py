@@ -10,12 +10,10 @@ import shutil
 import subprocess
 import sys
 import time
-from urllib.request import Request
 import uuid
 
 NATIVE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(NATIVE_DIR))
-from platform_support import open_url as urlopen
 from app_paths import macos_root, native_manifest_path, default_output_dir
 from installer_support import (check_private_path, atomic_bytes, atomic_json, verified_download,
                                safe_extract, native_query, checked_version_path, current_install,
@@ -36,13 +34,13 @@ FFMPEG_BUILDS = {
                 "ffmpeg": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
                 "ffprobe": "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6"},
 }
-
-
-def fetch_json(url):
-    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager/8.30",
-                                   "Accept": "application/vnd.github+json"})
-    with urlopen(request, timeout=40) as response:
-        return json.loads(response.read(4_000_000))
+DENO_VERSION = "v2.9.7"
+DENO_BUILDS = {
+    "aarch64": {"sha256": "5cd46d6268f6f78f5d88bdc7159d20bd44cdaa4b3303474839f87ec6fe7ae25c",
+                "size": 38469316},
+    "x86_64": {"sha256": "95daaff11c116a52ad54785e7914c8e9c9cdcaba793c5ed929c74ca2d8e6259a",
+               "size": 42295422},
+}
 
 
 def install_archive(url, digest, stage, name, size=None):
@@ -77,19 +75,12 @@ def install_binaries(stage, arch):
         digest = build[name]
         install_archive(url, digest, stage, name)
         records.append({"name": name, "version": "9.0.2", "url": url, "sha256": digest})
-    release = fetch_json("https://api.github.com/repos/denoland/deno/releases/latest")
     asset_name = f"deno-{arch}-apple-darwin.zip"
-    asset = next((a for a in release.get("assets", []) if a.get("name") == asset_name), None)
-    digest = str((asset or {}).get("digest") or "")
-    expected_prefix = "https://github.com/denoland/deno/releases/download/"
-    size = int((asset or {}).get("size") or 0)
-    if (not asset or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
-            or not str(asset.get("browser_download_url", "")).startswith(expected_prefix)
-            or not 0 < size <= 350 * 1024 * 1024):
-        raise RuntimeError("Release Deno ou SHA-256 GitHub invalide.")
-    install_archive(asset["browser_download_url"], digest[7:], stage, "deno", size)
-    records.append({"name": "deno", "version": release["tag_name"],
-                    "url": asset["browser_download_url"], "sha256": digest[7:]})
+    deno = DENO_BUILDS[arch]
+    url = f"https://github.com/denoland/deno/releases/download/{DENO_VERSION}/{asset_name}"
+    install_archive(url, deno["sha256"], stage, "deno", deno["size"])
+    records.append({"name": "deno", "version": DENO_VERSION,
+                    "url": url, "sha256": deno["sha256"]})
     atomic_json(Path(stage) / "binary-dependencies.json", records)
     for name in ("ffmpeg", "ffprobe", "deno"):
         command = [str(Path(stage) / "bin" / name), "--version" if name == "deno" else "-version"]

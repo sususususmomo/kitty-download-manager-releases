@@ -1,4 +1,4 @@
-# Kitty Download Manager — macOS v8.30
+# Kitty Download Manager — macOS v8.31
 
 Première distribution macOS, pour Mac Intel et Apple Silicon. Le même ZIP choisit
 les dépendances natives adaptées au Mac. Il exige macOS 13 Ventura ou plus récent
@@ -7,7 +7,7 @@ est configurée sur macOS 15, pour les deux architectures.
 
 ## Installer sur un Mac
 
-1. Décompresser `kitty-download-manager-v8.30-macos.zip`.
+1. Décompresser `kitty-download-manager-v8.31-macos.zip`.
 2. Ouvrir `Install.command`, ou lancer dans Terminal :
 
    ```sh
@@ -74,19 +74,19 @@ crée une branche macOS distincte, sans modifier la branche de tests Windows.
 
 ```fish
 cd ~/Downloads
-and test -f kitty-download-manager-v8.30-macos.zip
+and test -f kitty-download-manager-v8.31-macos.zip
 and test -d kitty-download-manager/.git
-and unzip -o kitty-download-manager-v8.30-macos.zip
+and unzip -o kitty-download-manager-v8.31-macos.zip
 and cd kitty-download-manager
 and rm -f -- kitty-download-manager-v8.28-unsigned.xpi kitty-download-manager-v8.29-unsigned.xpi
-and git switch -c macos-test-v8.30-(date +%s)
+and git switch -c macos-test-v8.31-(date +%s)
 and set kitty_login (gh api user --jq '.login')
 and set kitty_account_id (gh api user --jq '.id')
 and git add .
 and git -c user.name="$kitty_login" \
     -c user.email="$kitty_account_id+$kitty_login@users.noreply.github.com" \
     -c commit.gpgsign=false \
-    commit -m "Ajoute l installation macOS v8.30"
+    commit -m "Ajoute l installation macOS v8.31"
 and git push -u origin HEAD
 ```
 

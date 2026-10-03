@@ -1884,7 +1884,7 @@ def test_english_ui_has_no_french_residue_in_real_browser():
     bootstrap = r'''window.__store = {uiLanguage:"en"};
 window.browser = {
   runtime: {
-    getManifest: () => ({version:"8.30"}),
+    getManifest: () => ({version:"8.31"}),
     sendNativeMessage: async (host,payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{
@@ -1905,7 +1905,7 @@ window.browser = {
       }};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
       if (action === "compatibility") return {ok:true,compatibility:{
-        compatible:true,frontend_version:"8.30",backend_version:"8.30",
+        compatible:true,frontend_version:"8.31",backend_version:"8.31",
         frontend_protocol:1,backend_protocol:1
       }};
       if (action === "diagnostics") return {
@@ -1939,7 +1939,7 @@ window.browser = {
           }
         },
         compatibility:{
-          compatible:true,frontend_version:"8.30",backend_version:"8.30",
+          compatible:true,frontend_version:"8.31",backend_version:"8.31",
           frontend_protocol:1,backend_protocol:1
         },
         updates_cached:null
@@ -2092,13 +2092,13 @@ def test_language_toggle_popup_in_real_browser():
     bootstrap = r'''window.__store = {};
 window.browser = {
   runtime: {
-    getManifest: () => ({version:"8.30"}),
+    getManifest: () => ({version:"8.31"}),
     sendNativeMessage: async (host,payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{active:null,queue:[],history:[],queue_paused:false}};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
-      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.30",backend_version:"8.30",frontend_protocol:1,backend_protocol:1}};
-      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.30",backend_version:"8.30"},updates_cached:null};
+      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.31",backend_version:"8.31",frontend_protocol:1,backend_protocol:1}};
+      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.31",backend_version:"8.31"},updates_cached:null};
       return {ok:true};
     },
     sendMessage: async message => message?.type === "kitty-get-output-dir" ? {ok:true,settings:{output_dir:"/tmp/kitty"}} : {ok:true}
@@ -2241,13 +2241,13 @@ def test_popup_ui_smoke_in_real_browser():
 
     bootstrap = r'''window.browser = {
   runtime: {
-    getManifest: () => ({version: "8.30"}),
+    getManifest: () => ({version: "8.31"}),
     sendNativeMessage: async (host, payload) => {
       const action = payload?.action;
       if (action === "status") return {ok:true,state:{active:null,queue:[],history:[],queue_paused:false}};
       if (action === "youtube_auth_status") return {ok:true,configured:false,enabled:false,state:"missing"};
-      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.30",backend_version:"8.30",frontend_protocol:1,backend_protocol:1}};
-      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.30",backend_version:"8.30"},updates_cached:null};
+      if (action === "compatibility") return {ok:true,compatibility:{compatible:true,frontend_version:"8.31",backend_version:"8.31",frontend_protocol:1,backend_protocol:1}};
+      if (action === "diagnostics") return {ok:true,overall:"ready",dependencies:{items:[],required_missing:[],optional_missing:[]},system:{destination:{writable:true,write_tested:false,free_bytes:1000000},runtime_files:{ok:true},state_ok:true,migration:{status:"completed",legacy_found:false}},compatibility:{compatible:true,frontend_version:"8.31",backend_version:"8.31"},updates_cached:null};
       return {ok:true};
     },
     sendMessage: async message => {
@@ -2366,7 +2366,7 @@ let created = null;
 const sent = [];
 global.browser = {{
   runtime: {{
-    getManifest: () => ({{version:'8.30'}}),
+    getManifest: () => ({{version:'8.31'}}),
     sendNativeMessage: async (_host, payload) => {{
       sent.push(payload);
       if (payload.action === 'compatibility') return {{ok:true, compatibility:{{compatible:true}}}};
@@ -2543,7 +2543,7 @@ def test_safe_updater_preserves_user_state():
         install_dir = home / ".local" / "lib" / "kitty-download-manager"
         host_path = install_dir / "host.py"
         host_path.write_text(
-            host_path.read_text(encoding="utf-8").replace('APP_VERSION = "8.30"', 'APP_VERSION = "8.14"', 1),
+            host_path.read_text(encoding="utf-8").replace('APP_VERSION = "8.31"', 'APP_VERSION = "8.14"', 1),
             encoding="utf-8",
         )
 
@@ -2575,8 +2575,8 @@ def test_safe_updater_preserves_user_state():
             check=False,
         )
         check(update.returncode == 0, f"update.sh échoué:\n{update.stdout}")
-        check("8.14 → 8.30" in update.stdout, "résumé version updater absent")
-        check('APP_VERSION = "8.30"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
+        check("8.14 → 8.31" in update.stdout, "résumé version updater absent")
+        check('APP_VERSION = "8.31"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
         equal(json.loads(settings.read_text(encoding="utf-8"))["output_dir"], "/tmp/kitty-custom", "settings perdus")
         equal((auth / "cookies.txt").read_text(encoding="utf-8"), "COOKIE-SENTINEL", "cookies perdus")
         state = json.loads(queue.read_text(encoding="utf-8"))
@@ -2763,7 +2763,7 @@ def test_cache_cleanup_is_safe_and_reports_sizes():
         (cache / "worker.log.1").write_bytes(b"OLD-LOG-1")
         (cache / "worker.log.2").write_bytes(b"OLD-LOG-2")
 
-        client = {"version": "8.30", "protocol": 1}
+        client = {"version": "8.31", "protocol": 1}
         before = native_call(NATIVE / "host.py", home, {"action": "diagnostics", "client": client})
         check(before.get("ok") is True, "diagnostic cache avant nettoyage échoué")
         cache_before = before.get("system", {}).get("cache", {})
