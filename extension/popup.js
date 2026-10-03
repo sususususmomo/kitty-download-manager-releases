@@ -73,7 +73,7 @@ const refreshDiagnosticsBtn = document.getElementById("refreshDiagnostics");
 const runDiagnosticsBtn = document.getElementById("runDiagnostics");
 const checkUpdatesBtn = document.getElementById("checkUpdates");
 const downloadKittyUpdateBtn = document.getElementById("downloadKittyUpdate");
-const diagnosticUpdateMarkEl = document.getElementById("diagnosticUpdateMark");
+const backendUpdateMarkEl = document.getElementById("backendUpdateMark");
 const dependencyStateEl = document.getElementById("dependencyState");
 const dependencyStateTextEl = document.getElementById("dependencyStateText");
 const dependencyListEl = document.getElementById("dependencyList");
@@ -588,6 +588,7 @@ async function prepareBackendInstaller() {
 
 document.getElementById("configureBackend").addEventListener("click", () => {
   showSettings();
+  setSettingsSectionOpen("backend", true, false);
   document.getElementById("backendSettings").scrollIntoView({block: "start"});
 });
 document.getElementById("verifyBackend").addEventListener("click", async event => {
@@ -601,7 +602,7 @@ document.getElementById("verifyBackend").addEventListener("click", async event =
     if (backendConnection.kind === "ready") {
       restoreDestination();
       restoreYoutubeAuth();
-      restoreDiagnostics(false);
+      restoreDiagnostics(false).catch(() => {});
     }
     schedulePopupPoll(state?.active ? 750 : 1800);
   } finally { button.disabled = false; }
@@ -1333,6 +1334,10 @@ document.querySelectorAll(".sectionToggle").forEach(toggle => {
 
 
 const settingsSectionDefaults = Object.freeze({
+  language: false,
+  destination: false,
+  backend: false,
+  pill: false,
   cookies: false,
   dependencies: false,
   diagnostic: false,
@@ -1403,12 +1408,11 @@ function showSettings() {
   prepareBackendInstaller();
   mainViewEl.classList.add("hidden");
   settingsViewEl.classList.remove("hidden");
-  restoreSettingsSectionStates();
   setSettingsStatus();
   restoreDestination();
   restorePillSettings();
   restoreYoutubeAuth();
-  restoreDiagnostics(false);
+  restoreDiagnostics(false).catch(() => {});
 }
 
 function showMain() {
@@ -1684,20 +1688,20 @@ function renderCacheHealth(cache) {
 }
 
 
-function renderDiagnosticUpdateMark(compatibility, updates, kittyRelease = null) {
-  if (!diagnosticUpdateMarkEl) return;
+function renderBackendUpdateMark(compatibility, updates, kittyRelease = null) {
+  if (!backendUpdateMarkEl) return;
 
-  diagnosticUpdateMarkEl.hidden = true;
-  diagnosticUpdateMarkEl.className = "diagnosticUpdateMark";
-  diagnosticUpdateMarkEl.textContent = "";
-  diagnosticUpdateMarkEl.title = "";
+  backendUpdateMarkEl.hidden = true;
+  backendUpdateMarkEl.className = "backendUpdateMark";
+  backendUpdateMarkEl.textContent = "";
+  backendUpdateMarkEl.title = "";
 
   const incompatible = !compatibility || compatibility.compatible === false;
   if (incompatible) {
-    diagnosticUpdateMarkEl.hidden = false;
-    diagnosticUpdateMarkEl.classList.add("incompatible");
-    diagnosticUpdateMarkEl.textContent = "!";
-    diagnosticUpdateMarkEl.title = compatibility?.message ||
+    backendUpdateMarkEl.hidden = false;
+    backendUpdateMarkEl.classList.add("incompatible");
+    backendUpdateMarkEl.textContent = "!";
+    backendUpdateMarkEl.title = compatibility?.message ||
       "Frontend/backend non vérifiés ou incompatibles · mise à jour requise";
     return;
   }
@@ -1706,20 +1710,20 @@ function renderDiagnosticUpdateMark(compatibility, updates, kittyRelease = null)
   const count = Number(updates?.updates_available || 0);
   const kittyUpdate = Boolean(kittyRelease?.update_available);
   if (risky > 0) {
-    diagnosticUpdateMarkEl.hidden = false;
-    diagnosticUpdateMarkEl.classList.add("review");
-    diagnosticUpdateMarkEl.textContent = "↑!";
-    diagnosticUpdateMarkEl.title = I18N.tr(`${risky} mise${risky > 1 ? "s" : ""} à jour à vérifier pour compatibilité`);
+    backendUpdateMarkEl.hidden = false;
+    backendUpdateMarkEl.classList.add("review");
+    backendUpdateMarkEl.textContent = "↑!";
+    backendUpdateMarkEl.title = I18N.tr(`${risky} mise${risky > 1 ? "s" : ""} à jour à vérifier pour compatibilité`);
   } else if (kittyUpdate) {
-    diagnosticUpdateMarkEl.hidden = false;
-    diagnosticUpdateMarkEl.classList.add("available");
-    diagnosticUpdateMarkEl.textContent = "↑";
-    diagnosticUpdateMarkEl.title = `${I18N.tr("Mise à jour disponible")} · Kitty ${kittyRelease.latest_version || "?"}`;
+    backendUpdateMarkEl.hidden = false;
+    backendUpdateMarkEl.classList.add("available");
+    backendUpdateMarkEl.textContent = "↑";
+    backendUpdateMarkEl.title = `${I18N.tr("Mise à jour disponible")} · Kitty ${kittyRelease.latest_version || "?"}`;
   } else if (count > 0) {
-    diagnosticUpdateMarkEl.hidden = false;
-    diagnosticUpdateMarkEl.classList.add("available");
-    diagnosticUpdateMarkEl.textContent = "↑";
-    diagnosticUpdateMarkEl.title = I18N.tr(`${count} mise${count > 1 ? "s" : ""} à jour de dépendance disponible${count > 1 ? "s" : ""}`);
+    backendUpdateMarkEl.hidden = false;
+    backendUpdateMarkEl.classList.add("available");
+    backendUpdateMarkEl.textContent = "↑";
+    backendUpdateMarkEl.title = I18N.tr(`${count} mise${count > 1 ? "s" : ""} à jour de dépendance disponible${count > 1 ? "s" : ""}`);
   }
 }
 
@@ -1762,7 +1766,7 @@ function renderDiagnosticsHealth(response) {
   const updateItems = new Map(
     (Array.isArray(updates?.items) ? updates.items : []).map(item => [item.id, item])
   );
-  renderDiagnosticUpdateMark(r.compatibility, updates, kittyRelease);
+  renderBackendUpdateMark(r.compatibility, updates, kittyRelease);
   renderKittyUpdateButton(kittyRelease);
 
   dependencyStateEl.classList.remove("ready", "warning", "error");
@@ -1841,16 +1845,15 @@ function renderDiagnosticsHealth(response) {
       : "aucune détectée")
     : "non vérifiées";
   const latestKitty = kittyRelease?.latest_version || "—";
-  const kittyReleaseText = kittyReleaseStateText(kittyRelease);
+  document.getElementById("backendCompatibility").textContent = compatibilityText(r.compatibility);
+  document.getElementById("backendReleaseState").textContent = kittyReleaseStateText(kittyRelease);
+  document.getElementById("backendLatestRelease").textContent = latestKitty;
+  document.getElementById("backendDependencyUpdates").textContent = I18N.tr(updateText);
 
   diagnosticFactsEl.innerHTML =
     `<div class="diagnosticFact">Destination : <strong>${escapeHtml(writeText)}</strong></div>` +
     `<div class="diagnosticFact">Espace libre : <strong>${escapeHtml(formatBytes(destination.free_bytes))}</strong></div>` +
-    `<div class="diagnosticFact">Native Host : <strong>${escapeHtml(hostText)}</strong></div>` +
-    `<div class="diagnosticFact">Compatibilité : <strong>${escapeHtml(compatibilityText(r.compatibility))}</strong></div>` +
-    `<div class="diagnosticFact">Version Kitty : <strong>${escapeHtml(`${FRONTEND_VERSION} · ${kittyReleaseText}`)}</strong></div>` +
-    `<div class="diagnosticFact">Dernière release : <strong>${escapeHtml(latestKitty)}</strong></div>` +
-    `<div class="diagnosticFact">Mises à jour : <strong>${escapeHtml(updateText)}</strong></div>` +
+    `<div class="diagnosticFact">Fichiers du backend : <strong>${escapeHtml(hostText)}</strong></div>` +
     `<div class="diagnosticFact">Cache : <strong>${escapeHtml(formatBytes(cache.total_bytes || 0))}</strong></div>` +
     `<div class="diagnosticFact">Logs : <strong>${escapeHtml(formatBytes(cache.logs_bytes || 0))}</strong></div>` +
     `<div class="diagnosticFact">Récupérable : <strong>${escapeHtml(formatBytes(cache.reclaimable_bytes || 0))}</strong></div>` +

@@ -1235,7 +1235,7 @@ def test_settings_sections_default_collapsed_and_persisted():
     end = popup.index("async function setSettingsSectionOpen", start)
     block = popup[start:end]
 
-    for key in ("cookies", "dependencies", "diagnostic", "maintenance"):
+    for key in ("language", "destination", "backend", "pill", "cookies", "dependencies", "diagnostic", "maintenance"):
         check(f"{key}: false" in block, f"{key} n’est pas fermé par défaut")
 
     check(
@@ -2141,7 +2141,7 @@ window.browser = {
             page.wait_for_timeout(100)
             equal(page.locator("#settingsView h2").inner_text(), "Settings", "Réglages non traduit")
             equal(page.locator("#chooseDestination").inner_text(), "Choose…", "bouton destination non traduit")
-            equal(page.locator("#runDiagnostics").inner_text(), "Check Kitty now", "diagnostic non traduit")
+            equal(page.locator("#runDiagnostics").inner_text(), "Run diagnostics", "diagnostic non traduit")
             equal(page.evaluate("window.__store.uiLanguage"), "en", "langue anglaise non persistée")
             equal(page.locator("html").get_attribute("lang"), "en", "lang HTML non synchronisée")
 
@@ -2329,11 +2329,11 @@ def test_update_diagnostic_ui_contract():
     shared = (EXT / "shared.js").read_text(encoding="utf-8")
     background = (EXT / "background.js").read_text(encoding="utf-8")
 
-    for element_id in ("diagnosticUpdateMark", "checkUpdates", "downloadKittyUpdate"):
+    for element_id in ("backendUpdateMark", "checkUpdates", "downloadKittyUpdate"):
         check(f'id="{element_id}"' in html, f"UI update absente: {element_id}")
-    check("diagnosticUpdateMark.review" in html, "style update potentiellement incompatible absent")
-    check("diagnosticUpdateMark.incompatible" in html, "style mismatch frontend/backend absent")
-    check("renderDiagnosticUpdateMark" in js, "renderer icône update absent")
+    check("backendUpdateMark.review" in html, "style update potentiellement incompatible absent")
+    check("backendUpdateMark.incompatible" in html, "style mismatch frontend/backend absent")
+    check("renderBackendUpdateMark" in js, "renderer icône update absent")
     check('nativeMessage({ action: "check_updates" })' in js, "bouton check_updates non branché")
     check('nativeMessage({ action: "download_kitty_update" })' in js, "bouton download update non branché")
     check("SHA-256" in js and "Télécharger la mise à jour" in html, "UI vérification SHA-256 absente")

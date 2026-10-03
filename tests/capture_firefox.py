@@ -312,6 +312,48 @@ def run():
         wait_state(settings_rendered)
         command("scroll", bottom=False)
         capture("06-reglages", "Réglages — groupes repliés")
+        expected_sections = ["language", "destination", "backend", "pill", "cookies", "dependencies", "diagnostic", "maintenance"]
+        settings = command("state")
+        if (settings.get("settingsOrder") != expected_sections or any(settings["settingsSections"].values())
+                or not settings.get("settingsAccessible") or not settings.get("updateControlsInBackend")):
+            raise RuntimeError(f"Organisation des réglages invalide : {settings}")
+        for section, name, label in (
+            ("language", "12-langue", "Réglages — langue ouverte"),
+            ("destination", "13-destination", "Réglages — destination ouverte"),
+            ("pill", "14-pill", "Réglages — pill flottant ouvert"),
+        ):
+            command("click", selector=f'[data-settings-section="{section}"] .settingsGroupToggle')
+            wait_state(lambda state: state.get("settingsSections", {}).get(section))
+            command("scroll", selector=f'[data-settings-section="{section}"]')
+            capture(name, label)
+        command("click", selector="#pillStyleButton")
+        wait_state(lambda state: state.get("pillMenuVisible"))
+        capture("14b-menu-pill", "Réglages — menu du pill sans découpage")
+        command("click", selector='[data-pill-style="cat"]')
+        wait_state(lambda state: not state.get("pillMenuVisible"))
+        saved = command("settings-storage")
+        if not all(saved.get(name) for name in ("language", "destination", "pill")):
+            raise RuntimeError(f"États des nouveaux groupes non sauvegardés : {saved}")
+        command("close")
+        wait_state(lambda state: not state.get("open"))
+        command("open")
+        wait_state(lambda state: state.get("ready"))
+        command("click", selector="#openSettings")
+        persisted = wait_state(settings_rendered)
+        if not all(persisted["settingsSections"].get(name) for name in ("language", "destination", "pill")):
+            raise RuntimeError(f"États des groupes non restaurés : {persisted}")
+        for section in ("language", "destination", "pill"):
+            command("click", selector=f'[data-settings-section="{section}"] .settingsGroupToggle')
+        command("click", selector='[data-settings-section="diagnostic"] .settingsGroupToggle')
+        wait_state(lambda state: state.get("settingsSections", {}).get("diagnostic"))
+        command("scroll", selector='[data-settings-section="diagnostic"]')
+        capture("15-diagnostic", "Diagnostic — vérifications locales sans doublon de version ou mise à jour")
+        facts = command("state").get("diagnosticText", "")
+        if any(label in facts for label in ("Compatibilité", "Version Kitty", "Dernière release", "Mises à jour")):
+            raise RuntimeError(f"Informations backend dupliquées dans le diagnostic : {facts}")
+        command("click", selector='[data-settings-section="diagnostic"] .settingsGroupToggle')
+        report["settings_validation"] = {"order": expected_sections, "collapsible": "ok", "aria": "ok", "persistence": "ok", "diagnostic_duplicates": "none"}
+
         command("click", selector='[data-settings-section="dependencies"] .settingsGroupToggle')
         wait_state(diagnostics_rendered, label="la fin du diagnostic, quel que soit son état de santé")
         report["diagnostics"] = command("diagnostics")
@@ -336,8 +378,10 @@ def run():
             raise RuntimeError(f"Mauvais installateur GitHub : {missing}")
         command("scroll", bottom=False)
         capture("09-installation-backend", "Réglages — téléchargement du backend sans moteur installé")
+        command("click", selector='[data-settings-section="language"] .settingsGroupToggle')
         command("language", language="en")
         wait_state(lambda state: state.get("language") == "en" and state.get("backendText", "").startswith(("Backend not installed", "Cannot connect")))
+        command("click", selector='[data-settings-section="language"] .settingsGroupToggle')
         capture("10-installation-english", "Backend setup — English")
         manifest_backup.rename(manifest)
         manifest_backup = None

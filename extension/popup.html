@@ -967,6 +967,9 @@
       padding: 0;
       overflow: hidden;
     }
+    .settingsCollapse[data-settings-section="pill"]:not(.collapsed) {
+      overflow: visible;
+    }
     .settingsGroupToggle {
       width: 100%;
       min-height: 39px;
@@ -1358,7 +1361,7 @@
       margin-bottom: 8px;
       font-size: 11px;
     }
-    .diagnosticUpdateMark {
+    .backendUpdateMark {
       min-width: 18px;
       height: 18px;
       padding: 0 4px;
@@ -1372,18 +1375,18 @@
       margin-left: 2px;
       border: 1px solid transparent;
     }
-    .diagnosticUpdateMark[hidden] { display: none; }
-    .diagnosticUpdateMark.available {
+    .backendUpdateMark[hidden] { display: none; }
+    .backendUpdateMark.available {
       color: #9DC1FA;
       background: rgba(42,98,187,.12);
       border-color: rgba(80,135,219,.22);
     }
-    .diagnosticUpdateMark.review {
+    .backendUpdateMark.review {
       color: #F0C96F;
       background: rgba(230,184,92,.10);
       border-color: rgba(230,184,92,.24);
     }
-    .diagnosticUpdateMark.incompatible {
+    .backendUpdateMark.incompatible {
       color: #FFAAAA;
       background: rgba(239,109,109,.11);
       border-color: rgba(239,109,109,.24);
@@ -1618,104 +1621,133 @@
       <span class="settingsCat" aria-hidden="true">ᓚᘏᗢ</span>
     </div>
 
-    <div class="settingsGroup">
-      <div class="settingsRow">
-        <div>
-          <div class="settingsRowLabel">Langue</div>
+    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="language">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-language-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span>Langue</span></span>
+        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="settings-language-body" class="settingsGroupBody">
+        <div class="settingsRow">
           <div class="settingsRowSub">Change uniquement les textes affichés</div>
+          <select id="uiLanguage" class="settingsLanguageSelect" title="Langue de l’interface" aria-label="Langue de l’interface">
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
         </div>
-        <select id="uiLanguage" class="settingsLanguageSelect" title="Langue de l’interface" aria-label="Langue de l’interface">
-          <option value="fr">Français</option>
-          <option value="en">English</option>
-        </select>
       </div>
     </div>
 
-    <div class="settingsGroup" id="backendSettings">
-      <div class="settingsGroupTitle">Backend Kitty</div>
-      <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
-      <div id="backendPlatform" class="settingsRowSub"></div>
-      <div class="settingsHint">Le backend s’installe sur ton ordinateur et effectue les téléchargements.</div>
-      <div class="backendButtons">
-        <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger</a>
-        <button id="verifyBackend" class="ghost" type="button">Vérifier la connexion</button>
+    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="destination">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-destination-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph destination" aria-hidden="true">▰</span><span>Destination</span></span>
+        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="settings-destination-body" class="settingsGroupBody">
+        <div class="settingsDestinationRow">
+          <div class="settingsDestinationInfo" title="Dossier de destination">
+            <span id="destinationPath">Chargement…</span>
+          </div>
+          <button id="chooseDestination" class="ghost" type="button">Choisir…</button>
+        </div>
+        <div class="settingsHint">Les nouveaux jobs utilisent ce dossier. Les jobs déjà en file gardent leur destination.</div>
       </div>
-      <div id="backendInstallInstruction" class="settingsHint"></div>
-      <div class="settingsHint">Après l’installation, rouvre Kitty ou clique sur Vérifier la connexion.</div>
     </div>
 
-    <div class="settingsGroup">
-      <div class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph destination" aria-hidden="true">▰</span><span>Destination</span></div>
-      <div class="settingsDestinationRow">
-        <div class="settingsDestinationInfo" title="Dossier de destination">
-          <span id="destinationPath">Chargement…</span>
+    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="backend" id="backendSettings">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-backend-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span>Backend Kitty</span><span id="backendUpdateMark" class="backendUpdateMark" aria-hidden="true" hidden></span></span>
+        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="settings-backend-body" class="settingsGroupBody">
+        <div id="backendConnection" class="settingsRowLabel" role="status" aria-live="polite">Vérification de la connexion…</div>
+        <div id="backendPlatform" class="settingsRowSub"></div>
+        <div class="settingsHint">Le backend s’installe sur ton ordinateur et effectue les téléchargements.</div>
+        <div class="backendButtons">
+          <a id="downloadBackend" class="backendDownload" target="_blank" rel="noopener noreferrer" hidden>Télécharger</a>
+          <button id="verifyBackend" class="ghost" type="button">Vérifier la connexion</button>
         </div>
-        <button id="chooseDestination" class="ghost" type="button">Choisir…</button>
+        <div id="backendInstallInstruction" class="settingsHint"></div>
+        <div class="settingsHint">Après l’installation, rouvre Kitty ou clique sur Vérifier la connexion.</div>
+        <div class="diagnosticFacts">
+          <div class="diagnosticFact">Compatibilité : <strong id="backendCompatibility">Non vérifiée</strong></div>
+          <div class="diagnosticFact">Mise à jour Kitty : <strong id="backendReleaseState">Non vérifiée</strong></div>
+          <div class="diagnosticFact">Dernière release : <strong id="backendLatestRelease">—</strong></div>
+          <div class="diagnosticFact">Mises à jour des dépendances : <strong id="backendDependencyUpdates">non vérifiées</strong></div>
+        </div>
+        <div class="toolButtons">
+          <button id="checkUpdates" class="ghost" type="button">Vérifier les mises à jour</button>
+          <button id="downloadKittyUpdate" class="ghost" type="button" hidden>Télécharger la mise à jour</button>
+        </div>
+        <div class="settingsHint">« Vérifier les mises à jour » utilise le réseau uniquement quand tu le demandes pour comparer Kitty et les dépendances.</div>
       </div>
-      <div class="settingsHint">Les nouveaux jobs utilisent ce dossier. Les jobs déjà en file gardent leur destination.</div>
     </div>
 
-    <div class="settingsGroup">
-      <div class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph pill" aria-hidden="true">●</span><span>Pill flottant</span></div>
-      <div class="settingsRow">
-        <div>
-          <div class="settingsRowLabel">Afficher le pill</div>
-          <div class="settingsRowSub">Bouton de téléchargement sur les pages</div>
+    <div class="settingsGroup settingsCollapse collapsed" data-settings-section="pill">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-pill-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph pill" aria-hidden="true">●</span><span>Pill flottant</span></span>
+        <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="settings-pill-body" class="settingsGroupBody">
+        <div class="settingsRow">
+          <div>
+            <div class="settingsRowLabel">Afficher le pill</div>
+            <div class="settingsRowSub">Bouton de téléchargement sur les pages</div>
+          </div>
+          <input id="pillEnabled" type="checkbox" checked aria-label="Afficher le pill flottant">
         </div>
-        <input id="pillEnabled" type="checkbox" checked aria-label="Afficher le pill flottant">
-      </div>
-      <div class="settingsRow">
-        <div class="settingsRowLabel">Afficher sur</div>
-        <select id="pillScope" class="settingsPillScope" title="Où afficher le pill flottant">
-          <option value="all">Tous les sites</option>
-          <option value="media">Sites médias connus</option>
-        </select>
-      </div>
-      <div class="settingsRow">
-        <div>
-          <div class="settingsRowLabel">Style</div>
-          <div class="settingsRowSub">Apparence du pill sur les pages</div>
+        <div class="settingsRow">
+          <div class="settingsRowLabel">Afficher sur</div>
+          <select id="pillScope" class="settingsPillScope" title="Où afficher le pill flottant">
+            <option value="all">Tous les sites</option>
+            <option value="media">Sites médias connus</option>
+          </select>
         </div>
-        <div id="pillStylePicker" class="pillStylePicker">
-          <button id="pillStyleButton" type="button" aria-haspopup="listbox" aria-expanded="false" title="Choisir le style du pill">
-            <span id="pillStyleCurrentPreview" class="pillStylePreview" aria-hidden="true">
-              <span class="pillPreviewCat">ᓚᘏᗢ</span>
-            </span>
-            <span id="pillStyleCurrentLabel" class="pillStyleCurrentLabel">Kitty</span>
-            <span class="pillStyleChevron" aria-hidden="true">⌄</span>
-          </button>
-          <div id="pillStyleMenu" class="pillStyleMenu" role="listbox" aria-label="Style du pill" hidden>
-            <button class="pillStyleOption" type="button" data-pill-style="minimal" role="option" aria-selected="false">
-              <span class="pillStylePreview" aria-hidden="true"><span class="pillPreviewMinimal">↓</span></span>
-              <span class="pillStyleOptionText">Minimal</span>
-              <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
-            </button>
-            <button class="pillStyleOption active" type="button" data-pill-style="cat" role="option" aria-selected="true">
-              <span class="pillStylePreview" aria-hidden="true"><span class="pillPreviewCat">ᓚᘏᗢ</span></span>
-              <span class="pillStyleOptionText">Kitty</span>
-              <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
-            </button>
-            <button class="pillStyleOption" type="button" data-pill-style="classic" role="option" aria-selected="false">
-              <span class="pillStylePreview" aria-hidden="true">
-                <span class="pillPreviewClassic">
-                  <span class="pillPreviewClassicCat">ᓚᘏᗢ</span>
-                  <span class="pillPreviewClassicDownload">↓</span>
-                </span>
+        <div class="settingsRow">
+          <div>
+            <div class="settingsRowLabel">Style</div>
+            <div class="settingsRowSub">Apparence du pill sur les pages</div>
+          </div>
+          <div id="pillStylePicker" class="pillStylePicker">
+            <button id="pillStyleButton" type="button" aria-haspopup="listbox" aria-expanded="false" title="Choisir le style du pill">
+              <span id="pillStyleCurrentPreview" class="pillStylePreview" aria-hidden="true">
+                <span class="pillPreviewCat">ᓚᘏᗢ</span>
               </span>
-              <span class="pillStyleOptionText">Classique</span>
-              <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
+              <span id="pillStyleCurrentLabel" class="pillStyleCurrentLabel">Kitty</span>
+              <span class="pillStyleChevron" aria-hidden="true">⌄</span>
             </button>
+            <div id="pillStyleMenu" class="pillStyleMenu" role="listbox" aria-label="Style du pill" hidden>
+              <button class="pillStyleOption" type="button" data-pill-style="minimal" role="option" aria-selected="false">
+                <span class="pillStylePreview" aria-hidden="true"><span class="pillPreviewMinimal">↓</span></span>
+                <span class="pillStyleOptionText">Minimal</span>
+                <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
+              </button>
+              <button class="pillStyleOption active" type="button" data-pill-style="cat" role="option" aria-selected="true">
+                <span class="pillStylePreview" aria-hidden="true"><span class="pillPreviewCat">ᓚᘏᗢ</span></span>
+                <span class="pillStyleOptionText">Kitty</span>
+                <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
+              </button>
+              <button class="pillStyleOption" type="button" data-pill-style="classic" role="option" aria-selected="false">
+                <span class="pillStylePreview" aria-hidden="true">
+                  <span class="pillPreviewClassic">
+                    <span class="pillPreviewClassicCat">ᓚᘏᗢ</span>
+                    <span class="pillPreviewClassicDownload">↓</span>
+                  </span>
+                </span>
+                <span class="pillStyleOptionText">Classique</span>
+                <span class="pillStyleOptionCheck" aria-hidden="true">✓</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="settingsGroup settingsCollapse collapsed cookiesInactive" data-settings-section="cookies">
-      <button class="settingsGroupToggle" type="button" aria-expanded="false">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-cookies-body">
         <span class="settingsGroupTitle settingsTitleWithAccent"><span id="cookiesHeaderMark" class="settingsStateMark cookiesInactive" aria-hidden="true"></span><span>Cookies</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
-      <div class="settingsGroupBody">
+      <div id="settings-cookies-body" class="settingsGroupBody">
         <div class="settingsRow">
           <div>
             <div class="settingsRowLabel">Session dédiée YouTube</div>
@@ -1744,11 +1776,11 @@
     </div>
 
     <div class="settingsGroup settingsCollapse collapsed dependencyUnknown" data-settings-section="dependencies">
-      <button class="settingsGroupToggle" type="button" aria-expanded="false">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-dependencies-body">
         <span class="settingsGroupTitle settingsTitleWithAccent"><span id="dependenciesHeaderMark" class="settingsStateMark dependencyUnknown" aria-hidden="true"></span><span>Dépendances</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
-      <div class="settingsGroupBody">
+      <div id="settings-dependencies-body" class="settingsGroupBody">
         <div class="dependencyOverview">
           <div id="dependencyState" class="dependencyState">
             <span class="dependencyStateDot" aria-hidden="true"></span>
@@ -1768,36 +1800,34 @@
     </div>
 
     <div class="settingsGroup settingsCollapse collapsed" data-settings-section="diagnostic">
-      <button class="settingsGroupToggle" type="button" aria-expanded="false">
-        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph diagnostic" aria-hidden="true">◆</span><span>Diagnostic</span><span id="diagnosticUpdateMark" class="diagnosticUpdateMark" aria-hidden="true" hidden></span></span>
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-diagnostic-body">
+        <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph diagnostic" aria-hidden="true">◆</span><span>Diagnostic</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
-      <div class="settingsGroupBody">
+      <div id="settings-diagnostic-body" class="settingsGroupBody">
         <div id="diagnosticFacts" class="diagnosticFacts">
           <div class="diagnosticFact">Destination : <strong>…</strong></div>
           <div class="diagnosticFact">Espace libre : <strong>…</strong></div>
-          <div class="diagnosticFact">Native Host : <strong>…</strong></div>
+          <div class="diagnosticFact">Fichiers du backend : <strong>…</strong></div>
           <div class="diagnosticFact">Cache : <strong>…</strong></div>
           <div class="diagnosticFact">Logs : <strong>…</strong></div>
           <div class="diagnosticFact">État : <strong>…</strong></div>
         </div>
-        <button id="runDiagnostics" class="ghost diagnosticPrimary" type="button">Vérifier Kitty maintenant</button>
+        <button id="runDiagnostics" class="ghost diagnosticPrimary" type="button">Lancer le diagnostic</button>
         <div class="toolButtons">
-          <button id="checkUpdates" class="ghost" type="button">Vérifier les mises à jour</button>
-          <button id="downloadKittyUpdate" class="ghost" type="button" hidden>Télécharger la mise à jour</button>
           <button id="openLogs" class="ghost" type="button">Ouvrir les logs</button>
           <button id="copyDiagnostics" class="ghost" type="button">Copier le diagnostic</button>
         </div>
-        <div class="settingsHint">Le diagnostic normal reste entièrement local : aucune URL, aucun titre et aucun cookie ne sont copiés. « Vérifier les mises à jour » utilise le réseau uniquement quand tu le demandes pour comparer Kitty et les dépendances.</div>
+        <div class="settingsHint">Le diagnostic normal reste entièrement local : aucune URL, aucun titre et aucun cookie ne sont copiés.</div>
       </div>
     </div>
 
     <div class="settingsGroup settingsCollapse dangerZone collapsed" data-settings-section="maintenance">
-      <button class="settingsGroupToggle" type="button" aria-expanded="false">
+      <button class="settingsGroupToggle" type="button" aria-expanded="false" aria-controls="settings-maintenance-body">
         <span class="settingsGroupTitle settingsTitleWithAccent"><span class="settingsAccentGlyph maintenance" aria-hidden="true">!</span><span>Maintenance</span></span>
         <span class="settingsGroupChevron" aria-hidden="true">⌄</span>
       </button>
-      <div class="settingsGroupBody">
+      <div id="settings-maintenance-body" class="settingsGroupBody">
         <div class="cacheMaintenanceRow">
           <div class="cacheMaintenanceInfo">
             <div class="settingsRowLabel">Cache local</div>
@@ -1813,7 +1843,7 @@
     </div>
 
     <div id="settingsStatus" role="status" aria-live="polite"></div>
-    <div class="settingsFooter">Kitty Download Manager · v8.32</div>
+    <div class="settingsFooter">Kitty Download Manager · v8.33</div>
   </div>
 
   <script src="i18n.js"></script>

@@ -8,6 +8,7 @@ on:
       - '.github/workflows/backend-downloads.yml'
       - 'tests/check-backend-downloads.py'
       - 'tests/backend-download-checksums.json'
+      - 'extension/**'
 jobs:
   public-downloads:
     runs-on: ubuntu-latest

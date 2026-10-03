@@ -2,6 +2,12 @@
   const VALID_LANGUAGES = new Set(["fr", "en"]);
   const FR_EN = Object.freeze(
 {
+  "Lancer le diagnostic": "Run diagnostics",
+  "Fichiers du backend :": "Backend files:",
+  "Mise à jour Kitty :": "Kitty update:",
+  "Mises à jour des dépendances :": "Dependency updates:",
+  "« Vérifier les mises à jour » utilise le réseau uniquement quand tu le demandes pour comparer Kitty et les dépendances.": "Check updates uses the network only when you ask to compare Kitty and its dependencies.",
+  "Le diagnostic normal reste entièrement local : aucune URL, aucun titre et aucun cookie ne sont copiés.": "Normal diagnostics stay entirely local: no URL, title or cookie is copied.",
   "Backend Kitty": "Kitty backend",
   "Vérification de la connexion…": "Checking connection…",
   "Backend connecté": "Backend connected",

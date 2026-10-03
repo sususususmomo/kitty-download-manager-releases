@@ -44,10 +44,20 @@ function popupState() {
     backendText: text("backendConnection"),
     backendNotice: !doc.getElementById("backendNotice")?.hidden,
     backendDownload: doc.getElementById("downloadBackend")?.href,
-    backendDownloadVisible: !doc.getElementById("downloadBackend")?.hidden,
+    backendDownloadVisible: Boolean(doc.getElementById("downloadBackend")?.getClientRects().length),
     downloadEnabled: !doc.getElementById("download").disabled,
     sections: Object.fromEntries([...doc.querySelectorAll(".collapseSection")]
       .map(section => [section.dataset.section, !section.classList.contains("collapsed")])),
+    settingsOrder: [...doc.querySelectorAll("#settingsView > .settingsGroup")].map(section => section.dataset.settingsSection),
+    settingsAccessible: [...doc.querySelectorAll(".settingsCollapse")].every(section => {
+      const button = section.querySelector(".settingsGroupToggle");
+      return button.getAttribute("aria-expanded") === String(!section.classList.contains("collapsed"))
+        && doc.getElementById(button.getAttribute("aria-controls")) === section.querySelector(".settingsGroupBody");
+    }),
+    diagnosticText: text("diagnosticFacts"),
+    updateControlsInBackend: ["checkUpdates", "downloadKittyUpdate", "backendCompatibility", "backendReleaseState"]
+      .every(id => doc.getElementById(id)?.closest(".settingsCollapse")?.dataset.settingsSection === "backend"),
+    pillMenuVisible: Boolean(doc.getElementById("pillStyleMenu")?.getClientRects().length),
     settingsSections: Object.fromEntries([...doc.querySelectorAll(".settingsCollapse")]
       .map(section => [section.dataset.settingsSection, !section.classList.contains("collapsed")])),
   };
@@ -59,9 +69,11 @@ async function command(request) {
       await browser.storage.local.set({
         uiLanguage: "fr", selectedMode: "1080",
         sectionStates: { download: true, queue: false, history: false },
-        settingsSectionStates: { cookies: false, dependencies: false, diagnostic: false, maintenance: false },
+        settingsSectionStates: { language: false, destination: false, backend: false, pill: false, cookies: false, dependencies: false, diagnostic: false, maintenance: false },
       });
       return browser.runtime.sendNativeMessage("com.kitty.download_manager", { action: "status" });
+    case "settings-storage":
+      return (await browser.storage.local.get("settingsSectionStates")).settingsSectionStates;
     case "open": {
       const current = await browser.windows.getCurrent();
       await browser.windows.update(current.id, { focused: true });
@@ -81,13 +93,14 @@ async function command(request) {
     case "language": {
       const view = popupView();
       const select = view.document.getElementById("uiLanguage");
+      if (!select.getClientRects().length) throw new Error("Langue repliée");
       select.value = request.language;
       select.dispatchEvent(new view.Event("change", {bubbles:true}));
       return popupState();
     }
     case "click": {
       const button = popupView()?.document.querySelector(request.selector);
-      if (!button || button.disabled) throw new Error(`Bouton indisponible : ${request.selector}`);
+      if (!button || button.disabled || !button.getClientRects().length) throw new Error(`Bouton indisponible : ${request.selector}`);
       button.click();
       return popupState();
     }
