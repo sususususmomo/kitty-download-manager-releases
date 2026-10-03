@@ -24,6 +24,8 @@ versions et sommes de contrôle sont conservées dans
   séparément par l’installateur. Les notices présentes dans les archives sont
   conservées dans `notices` de la version installée.
 - Deno : https://github.com/denoland/deno
+  macOS : version 2.9.7 fixée, archives Intel et Apple Silicon vérifiées par SHA-256.
+  https://github.com/denoland/deno/releases/tag/v2.9.7
 
 Les notices et licences des wheels Python restent dans les répertoires
 `.dist-info` des packages installés. Les exécutables FFmpeg et Deno sont copiés

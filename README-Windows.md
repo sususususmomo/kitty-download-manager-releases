@@ -1,4 +1,8 @@
-# Kitty Download Manager V8.31 — Windows x64, version de test
+> Documentation de l’archive Windows v8.29 livrée séparément. Les sources
+> communes du présent ZIP macOS portent la version 8.31 et ont aussi été testées
+> sous Windows ; aucun nouveau ZIP Windows n’est livré ici.
+
+# Kitty Download Manager V8.29 — Windows x64, version de test
 
 Cette distribution ajoute un installateur Windows à la base V8.24. Elle est
 destinée à Windows 10/11 x64 et à Firefox. L’installation ne nécessite ni Python
@@ -6,7 +10,7 @@ préinstallé ni droits administrateur. Une connexion Internet est nécessaire.
 
 ## Installation
 
-1. Extraire `kitty-download-manager-v8.31-windows-x64.zip`.
+1. Extraire `kitty-download-manager-v8.29-windows-x64.zip`.
 2. Ouvrir le dossier `kitty-download-manager`, puis double-cliquer sur `Install.cmd`.
 3. Attendre les téléchargements et les vérifications. En cas d’erreur, le message
    reste visible dans la fenêtre; ne pas considérer l’installation comme réussie.
@@ -33,7 +37,7 @@ Elle remplace les sources extraites, pas le dossier installé ni les réglages.
 ```powershell
 $downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
 Set-Location -LiteralPath $downloads
-$zip = 'kitty-download-manager-v8.31-windows-x64.zip'
+$zip = 'kitty-download-manager-v8.29-windows-x64.zip'
 if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive absente de Téléchargements.' }
 if (Test-Path -LiteralPath '.\kitty-download-manager') { Remove-Item -LiteralPath '.\kitty-download-manager' -Recurse -Force }
 Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
@@ -42,7 +46,7 @@ Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
 
 ## Extension Firefox permanente
 
-Le fichier `kitty-download-manager-v8.31-unsigned.xpi` est fourni pour la
+Le fichier `kitty-download-manager-v8.29-unsigned.xpi` est fourni pour la
 soumission à Mozilla. **Il n’est pas signé** : Firefox standard ne permet pas
 son installation permanente en l’état. Le chargement temporaire ci-dessus
 fonctionne pour les essais, mais doit être refait après un redémarrage de Firefox.
@@ -124,7 +128,7 @@ est en UTF-8 et la CI affiche une trace complète sur erreur.
 La V8.27 a ensuite passé le workflow Windows au vert, selon la confirmation
 de l’utilisateur. Le journal V8.28 fourni par l’utilisateur confirme six captures Windows
 réussies. La septième a échoué sur une attente exigeant uniquement l’état
-vert des dépendances. La V8.31 corrige cette attente; son passage Windows
+vert des dépendances. La V8.29 corrige cette attente; son passage Windows
 reste à lancer.
 
 ```powershell
@@ -170,9 +174,9 @@ Télécharger l’archive dans `~/Downloads`, puis exécuter :
 
 ```fish
 cd ~/Downloads
-and test -f kitty-download-manager-v8.31-windows-x64.zip
+and test -f kitty-download-manager-v8.29-windows-x64.zip
 and test -d kitty-download-manager/.git
-and unzip -o kitty-download-manager-v8.31-windows-x64.zip
+and unzip -o kitty-download-manager-v8.29-windows-x64.zip
 and cd kitty-download-manager
 and rm -f -- kitty-download-manager-v8.28-unsigned.xpi
 and set kitty_login (gh api user --jq '.login')
@@ -181,14 +185,14 @@ and git add .
 and git -c user.name="$kitty_login" \
     -c user.email="$kitty_account_id+$kitty_login@users.noreply.github.com" \
     -c commit.gpgsign=false \
-    commit -m "Corrige l attente du diagnostic Firefox Windows v8.31"
+    commit -m "Corrige l attente du diagnostic Firefox Windows v8.29"
 and git push
 ```
 
 Cette commande conserve le même dossier et son dépôt Git. Le push relance
 Actions sur la branche en cours.
 
-La V8.31 attend un diagnostic terminé, y compris avec avertissement ou erreur,
+La V8.29 attend un diagnostic terminé, y compris avec avertissement ou erreur,
 au lieu d’exiger une couleur verte. Elle attend aussi la fin de la requête et
 la liste des dépendances, centre la dernière capture sur ce groupe et conserve
 le diagnostic natif complet dans `rapport.json`. Un problème de dépendance

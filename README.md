@@ -3,7 +3,12 @@
 Première distribution macOS, pour Mac Intel et Apple Silicon. Le même ZIP choisit
 les dépendances natives adaptées au Mac. Il exige macOS 13 Ventura ou plus récent
 et une connexion Internet pendant l’installation. La validation GitHub Actions
-est configurée sur macOS 15, pour les deux architectures.
+a réussi sur macOS 15.7.9 et Firefox 157.0, pour les deux architectures.
+
+Résultats : [validation macOS v8.31](https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585158). Chaque Mac a passé
+22 tests, produit sept captures de la vraie popup et obtenu un diagnostic prêt.
+Les 14 captures ont été vérifiées visuellement. Le rapport détaillé est dans
+`docs/validation-macos-v8.31.json`.
 
 ## Installer sur un Mac
 
@@ -25,6 +30,8 @@ Python, yt-dlp, Mutagen, psutil, FFmpeg, ffprobe et Deno sont privés à Kitty.
 Homebrew et une installation préalable de Python ne sont pas nécessaires.
 Les archives Python et les exécutables téléchargés sont vérifiés par SHA-256.
 Les versions et sources téléchargées sont conservées dans la version installée.
+Deno macOS 2.9.7 est fixé et vérifié sans appel à l’API GitHub. Le dossier de
+téléchargement par défaut est préparé pendant l’installation.
 
 Le manifeste Native Messaging de Firefox est enregistré à l’emplacement macOS :
 
@@ -78,7 +85,7 @@ and test -f kitty-download-manager-v8.31-macos.zip
 and test -d kitty-download-manager/.git
 and unzip -o kitty-download-manager-v8.31-macos.zip
 and cd kitty-download-manager
-and rm -f -- kitty-download-manager-v8.28-unsigned.xpi kitty-download-manager-v8.29-unsigned.xpi
+and rm -f -- kitty-download-manager-v8.28-unsigned.xpi kitty-download-manager-v8.29-unsigned.xpi kitty-download-manager-v8.30-unsigned.xpi
 and git switch -c macos-test-v8.31-(date +%s)
 and set kitty_login (gh api user --jq '.login')
 and set kitty_account_id (gh api user --jq '.id')
@@ -90,7 +97,9 @@ and git -c user.name="$kitty_login" \
 and git push -u origin HEAD
 ```
 
-Dans **Actions**, ouvrir **Kitty macOS validation**. Les deux jobs macOS vérifient :
+Les sources ont déjà été envoyées sur la branche `macos-test-v8.30-codex-20261003`
+pour cette validation. La commande ci-dessus sert à relancer les tests après
+un changement local. Dans **Actions**, ouvrir **Kitty macOS validation**. Les deux jobs macOS vérifient :
 
 - l’installation complète avec les dépendances réellement téléchargées ;
 - le lanceur natif et les réponses binaires de Firefox, avec un PATH minimal ;
@@ -106,6 +115,8 @@ Les artifacts `kitty-macos-Intel-firefox-captures` et
 le diagnostic natif et les logs. Ils sont disponibles pendant 14 jours, même si
 une étape échoue après la création de fichiers. Les captures montrent des états
 stabilisés ; elles ne mesurent pas les flashs très brefs ni le sélecteur AppleScript.
+L’audio est testé hors ligne avec FFmpeg ; les téléchargements de médias en ligne
+et la connexion YouTube ne sont pas couverts par ces jobs macOS.
 
 Cette distribution reprend les sources communes et les tests Windows/Linux.
 Les releases Windows v8.29 et Linux v8.24 restent des archives séparées.

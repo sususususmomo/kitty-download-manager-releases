@@ -1,32 +1,164 @@
 {
   "version": "8.31",
   "platform": "macos",
+  "validation_date": "2026-10-03",
+  "native_macos_validation": "Réussie sur Intel et Apple Silicon dans GitHub Actions",
+  "tested_commit": "f05dea8d0ff9cba6587b51e28dd7d380378e2229",
+  "workflow_run_id": 37109585158,
+  "workflow_url": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585158",
+  "workflow_conclusion": "success",
   "architectures": [
-    "Intel x86_64",
-    "Apple Silicon arm64"
+    {
+      "architecture": "Intel",
+      "runner": "macos-15-intel",
+      "os": "macOS-15.7.9-x86_64-i386-64bit-Mach-O",
+      "conclusion": "success",
+      "portable_tests_passed": 11,
+      "capture_policy_tests_passed": 6,
+      "installed_tests_passed": 5,
+      "skipped_tests": 0,
+      "firefox_version": "157.0",
+      "geckodriver_version": "0.37.1",
+      "native_messaging": "ok",
+      "dependency_status": "ready",
+      "dependencies": {
+        "python": "3.13.16",
+        "yt_dlp": "2026.8.19",
+        "ffmpeg": "ffmpeg version 9.0.2-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.2-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers",
+        "mutagen": "1.48.1",
+        "psutil": "7.2.2",
+        "deno": "deno 2.9.7 (stable, release, x86_64-apple-darwin)"
+      },
+      "captures_count": 7,
+      "captures": [
+        {
+          "file": "01-principal-vide.png",
+          "width": 410,
+          "height": 408
+        },
+        {
+          "file": "02-principal-termine.png",
+          "width": 410,
+          "height": 462
+        },
+        {
+          "file": "03-file-ouverte.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "04-file-bas.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "05-historique.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "06-reglages.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "07-dependances.png",
+          "width": 410,
+          "height": 520
+        }
+      ],
+      "captures_visually_reviewed": true,
+      "artifact_url": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585158/artifacts/11269331505",
+      "queue_restored": true
+    },
+    {
+      "architecture": "Apple-Silicon",
+      "runner": "macos-15",
+      "os": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+      "conclusion": "success",
+      "portable_tests_passed": 11,
+      "capture_policy_tests_passed": 6,
+      "installed_tests_passed": 5,
+      "skipped_tests": 0,
+      "firefox_version": "157.0",
+      "geckodriver_version": "0.37.1",
+      "native_messaging": "ok",
+      "dependency_status": "ready",
+      "dependencies": {
+        "python": "3.13.16",
+        "yt_dlp": "2026.8.19",
+        "ffmpeg": "ffmpeg version 9.0.2-https://www.martin-riedl.de Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffprobe": "ffprobe version 9.0.2-https://www.martin-riedl.de Copyright (c) 2007-2026 the FFmpeg developers",
+        "mutagen": "1.48.1",
+        "psutil": "7.2.2",
+        "deno": "deno 2.9.7 (stable, release, aarch64-apple-darwin)"
+      },
+      "captures_count": 7,
+      "captures": [
+        {
+          "file": "01-principal-vide.png",
+          "width": 410,
+          "height": 408
+        },
+        {
+          "file": "02-principal-termine.png",
+          "width": 410,
+          "height": 462
+        },
+        {
+          "file": "03-file-ouverte.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "04-file-bas.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "05-historique.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "06-reglages.png",
+          "width": 410,
+          "height": 520
+        },
+        {
+          "file": "07-dependances.png",
+          "width": 410,
+          "height": 520
+        }
+      ],
+      "captures_visually_reviewed": true,
+      "artifact_url": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585158/artifacts/11268814511",
+      "queue_restored": true
+    }
   ],
-  "local_system": "Linux",
-  "native_macos_validation": "À lancer dans GitHub Actions",
-  "local_tests": {
-    "regression_passed": 94,
-    "regression_skipped": 5,
-    "macos_port_passed": 10,
-    "macos_port_skipped": 1,
-    "windows_port_passed": 28,
-    "windows_port_skipped": 4,
-    "capture_policy_passed": 6
+  "regression": {
+    "passed": 94,
+    "skipped_chromium_visuals": 5
   },
-  "checks": [
-    "Syntaxe Python et JavaScript",
-    "Syntaxe bash",
-    "Workflows YAML",
-    "Sommes de contrôle Python Intel et Apple Silicon",
-    "Sommes de contrôle FFmpeg / ffprobe Intel et Apple Silicon"
+  "windows_common_sources_validation": {
+    "workflow_url": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37109585157",
+    "conclusion": "success",
+    "portable_and_process_tests_passed": 32,
+    "installed_tests_passed": 4,
+    "firefox_capture_job": "success"
+  },
+  "corrections": [
+    "Deno macOS 2.9.7 fixé et vérifié par SHA-256, sans requête à l API GitHub.",
+    "Création de la destination par défaut pendant l installation macOS pour éviter une alerte au premier lancement.",
+    "Attente du document de la popup Firefox avant les lectures du banc de captures.",
+    "Fixtures des mises à jour calculées à partir de la version actuelle."
   ],
   "limitations": [
-    "Les tests réels macOS et les captures Firefox exigent les runners GitHub Actions.",
-    "Les captures stabilisées ne mesurent pas les flashs brefs.",
-    "Le XPI est non signé.",
-    "Install.command est un installateur Terminal, pas un PKG Apple signé/notarié."
+    "Captures stabilisées dans Firefox headless; elles ne mesurent pas les flashs brefs.",
+    "File et historique des captures alimentés avec des exemples CI.",
+    "Audio testé hors ligne; téléchargements de médias en ligne et connexion YouTube non testés sur macOS.",
+    "Sélecteur AppleScript et lancement par double clic dans Finder non vérifiés manuellement.",
+    "Le XPI est non signé; Install.command n est pas un PKG Apple signé et notarié."
   ]
 }
