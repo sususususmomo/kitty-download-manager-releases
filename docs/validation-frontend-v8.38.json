@@ -2,9 +2,116 @@
   "frontend_version": "8.38",
   "backend_version": "8.32",
   "native_protocol": 1,
-  "status": "pending",
-  "tested_application_commit": "0000000000000000000000000000000000000000",
-  "windows_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/1",
-  "macos_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/2",
-  "publication_checks_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/3"
+  "status": "validated",
+  "tested_application_commit": "3c66d68c8a119a79f2198429a239d1417a4d15ec",
+  "windows_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37177231858",
+  "macos_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37177231853",
+  "publication_checks_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37177231851",
+  "workflow_conclusions": {
+    "Windows": "success",
+    "macOS Intel": "success",
+    "macOS Apple Silicon": "success",
+    "Linux regression": "success",
+    "Mozilla lint, public downloads and Gecko comparison": "success"
+  },
+  "local_regression": {
+    "passed": 95,
+    "failed": 0,
+    "skipped": 5,
+    "skipped_reason": "Legacy Chromium checks unavailable locally; actual Firefox comparisons and OS popup captures run separately"
+  },
+  "release_tests": {
+    "passed": 12,
+    "failed": 0
+  },
+  "backend_packaging_tests": {
+    "passed": 3,
+    "failed": 0
+  },
+  "startup_async_scenarios": 9,
+  "image_integration": {
+    "yt_dlp_version": "2026.8.19",
+    "cases": 11,
+    "platforms": [
+      "Linux",
+      "installed Windows x64",
+      "installed macOS Intel",
+      "installed macOS Apple Silicon"
+    ],
+    "source": "Local HTTP fixtures with the real yt-dlp; assertions prove no audio/video bytes are requested",
+    "checks": [
+      "Video thumbnail",
+      "Audio cover",
+      "No playable formats",
+      "Collection cover without fetching entries",
+      "404 fallback",
+      "Actual format despite misleading URL suffix",
+      "Missing/invalid images",
+      "Existing output preserved",
+      "Cancellation cleanup",
+      "HTTP/HTTPS thumbnail URLs"
+    ]
+  },
+  "mozilla_lint": {
+    "errors": 0,
+    "notices": 0,
+    "warnings": 1,
+    "unsafe_html_warnings": 0,
+    "remaining_warning": "Firefox Android consent field minimum version; Kitty targets desktop Firefox",
+    "artifact_id": 11293103479
+  },
+  "render_comparison": {
+    "baseline_tag": "frontend-v8.37",
+    "engine": "Firefox 153.0",
+    "languages": [
+      "fr",
+      "en"
+    ],
+    "viewport_heights": [
+      320,
+      520,
+      900
+    ],
+    "compared_states": 90,
+    "differing_pixels": 0,
+    "geometry_identical": true,
+    "artifact_id": 11293058548,
+    "interaction_and_security_checks": "passed",
+    "image_mode_cases": 4,
+    "image_mode_checks": [
+      "Disabled media/playlist choices",
+      "Small menu remains reachable",
+      "Previous format/playlist restored",
+      "Persisted mode",
+      "Image payload sent",
+      "Backend v8.31 blocked with update hint"
+    ],
+    "capture_controls": "Animations frozen. Indeterminate progress compared, then fixed at zero for captures on both versions. Existing UI is compared; the new menu is tested separately."
+  },
+  "os_capture_counts": {
+    "Windows": 22,
+    "macOS Intel": 22,
+    "macOS Apple Silicon": 22
+  },
+  "screenshots_artifacts": {
+    "Windows": 11293728412,
+    "macOS Intel": 11293474010,
+    "macOS Apple Silicon": 11293763121
+  },
+  "checked": [
+    "Image-only queue, history, duplicates and forced retry",
+    "Image mode in popup, floating button and context menu",
+    "Installed launcher, upgrades, offline audio, image-only downloads and uninstall",
+    "Existing UI pixel comparisons in FR/EN",
+    "Actual Firefox toolbar popup including image menu on Windows and both Mac architectures",
+    "Public bootstrap archives and SHA-256",
+    "GPL v3.0 text included in frontend and backend packages"
+  ],
+  "limitations": [
+    "Unsigned XPI; Mozilla signing and listed publication pending",
+    "No Android backend",
+    "macOS installer remains an unsigned, unnotarized script",
+    "OS screenshots show stabilized states, not transient flashes",
+    "Online media sites and YouTube authentication not exercised; image integration uses local fixtures"
+  ]
 }
