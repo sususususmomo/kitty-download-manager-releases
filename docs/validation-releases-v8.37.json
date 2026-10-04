@@ -1,0 +1,35 @@
+{
+  "frontend_version": "8.37",
+  "backend_version": "8.31",
+  "source_commit": "215549b1186316f0fd732cbb710277c9fc978f08",
+  "publication_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37169444299",
+  "conclusion": "success",
+  "release_url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/frontend-v8.37",
+  "latest_backend_tag": "v8.31",
+  "assets": [
+    {
+      "name": "kitty-download-manager-v8.37-unsigned.xpi",
+      "size": 890789,
+      "sha256": "351bbb7f4581f7b3907a14c3a9a1f3649a2fdd753bb2bc885341ec5d6dfba2ac",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37-unsigned.xpi"
+    },
+    {
+      "name": "kitty-download-manager-v8.37.zip",
+      "size": 2057172,
+      "sha256": "f387d147cd9e65be3a87f97239f4d8331999aabb8f3251585e6cf79e9a0d8cc3",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 304,
+      "sha256": "8b20ed5a45e457a8b69608e6f0a08d2e0ff70b03201c92c3aa99754be57fe7ce",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/SHA256SUMS"
+    },
+    {
+      "name": "validation-frontend-v8.37.json",
+      "size": 3169,
+      "sha256": "421c2af70abd6658502e4cb8941a96de01083aad745e5dc14209385318f7aa15",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/validation-frontend-v8.37.json"
+    }
+  ]
+}
