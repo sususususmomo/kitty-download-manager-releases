@@ -1,0 +1,86 @@
+{
+  "frontend_version": "8.38",
+  "backend_version": "8.32",
+  "publication_commit": "962166d2ac02b7c2c92db4d25cca7e8431be436d",
+  "tested_application_commit": "3c66d68c8a119a79f2198429a239d1417a4d15ec",
+  "workflow_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37177567844",
+  "workflow_conclusion": "success",
+  "release_automation_tests_passed": 12,
+  "linux_regression_passed": 95,
+  "local_chromium_checks_skipped": 5,
+  "latest_backend_tag": "v8.32",
+  "uploaded_artifact_and_public_asset_sha256_match": true,
+  "archive_integrity_and_included_gpl_license_verified": true,
+  "release_artifact_id": 11293967941,
+  "releases": [
+    {
+      "tag": "v8.32",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.32",
+      "draft": false,
+      "published_at": "2026-10-04T04:39:02Z",
+      "assets": [
+        {
+          "name": "kitty-download-manager-v8.32-macos.zip",
+          "size": 106045,
+          "sha256": "ae2831da6cb0e32f410dcd724a01a00372afc0346422ecc808fff23d6d1ba3e3",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.32/kitty-download-manager-v8.32-macos.zip"
+        },
+        {
+          "name": "kitty-download-manager-v8.32-windows-x64.zip",
+          "size": 106527,
+          "sha256": "38a7602c8527b9ca7c5122fb74d4bd8d0dae66a190f5aca97dfcedad078bdc58",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.32/kitty-download-manager-v8.32-windows-x64.zip"
+        },
+        {
+          "name": "kitty-download-manager-v8.32.zip",
+          "size": 106179,
+          "sha256": "0c9dd877f466d24673d431e5878f60c8b0d778804267f17ebab320cdb7abbdd7",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.32/kitty-download-manager-v8.32.zip"
+        },
+        {
+          "name": "SHA256SUMS",
+          "size": 315,
+          "sha256": "526356b9bcdd7ff516dae7d30d6e2d2e1061316268fc9fb44fd6c3b948bd9775",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.32/SHA256SUMS"
+        }
+      ]
+    },
+    {
+      "tag": "frontend-v8.38",
+      "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/frontend-v8.38",
+      "draft": false,
+      "published_at": "2026-10-04T04:38:55Z",
+      "assets": [
+        {
+          "name": "kitty-download-manager-v8.38-unsigned.xpi",
+          "size": 903437,
+          "sha256": "34f2f2bbb7853cc8180fa8082478fef2f861e1765076e447af820aada78007c3",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/kitty-download-manager-v8.38-unsigned.xpi"
+        },
+        {
+          "name": "kitty-download-manager-v8.38.zip",
+          "size": 2109465,
+          "sha256": "57490c2d32d853f9151827f90c6e33f0f863a3f49fe57019e012665b3769826e",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/kitty-download-manager-v8.38.zip"
+        },
+        {
+          "name": "SHA256SUMS",
+          "size": 304,
+          "sha256": "b086cf5a579c99df3d5370a72197e2f2d195d5883ecea9c5f787e7237a8c9fdd",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/SHA256SUMS"
+        },
+        {
+          "name": "validation-frontend-v8.38.json",
+          "size": 3982,
+          "sha256": "c6b0f16c936b6508c21fcd029e32dc9c607bb4712e284ddea568b953416ab2e5",
+          "url": "https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/validation-frontend-v8.38.json"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Unsigned Firefox XPI; Mozilla signing and listed publication pending.",
+    "macOS installer is a script, without Apple signing or notarization.",
+    "Image integration uses local HTTP fixtures, not online media accounts."
+  ]
+}
