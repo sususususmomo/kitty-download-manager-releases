@@ -1,9 +1,0 @@
-{
-  "name": "com.kitty.download_manager",
-  "description": "Host natif persistant pour Kitty Download Manager",
-  "path": "__HOST_PATH__",
-  "type": "stdio",
-  "allowed_extensions": [
-    "kitty-download-manager@local"
-  ]
-}
