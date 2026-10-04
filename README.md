@@ -26,6 +26,10 @@ Open Kitty in Firefox: the installed backend is detected automatically.
 
 **Firefox extension:** requires Firefox 140+. Mozilla signing is pending. For temporary testing, extract the [extension sources](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), then load `extension/manifest.json` through `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
 
+### License
+
+Kitty Download Manager is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`). Third-party dependencies retain their own licenses; see [Third-party notices](THIRD-PARTY-NOTICES.md).
+
 ---
 
 ## Français
@@ -47,3 +51,7 @@ Les installateurs Windows et macOS préparent des dépendances privées. Sous Li
 Ouvrez Kitty dans Firefox : le backend installé est détecté automatiquement.
 
 **Extension Firefox :** nécessite Firefox 140 ou plus récent. La signature Mozilla est en attente. Pour un test temporaire, décompressez les [sources de l’extension](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), puis chargez `extension/manifest.json` depuis `about:debugging` → **Ce Firefox** → **Charger un module temporaire**.
+
+### Licence
+
+Kitty Download Manager est distribué sous la [licence publique générale GNU v3.0](LICENSE) (`GPL-3.0-only`). Les dépendances tierces conservent leurs propres licences ; voir les [notices des composants tiers](THIRD-PARTY-NOTICES.md).
