@@ -1,4 +1,4 @@
 {
-  "mode": "publish",
+  "mode": "dry-run",
   "kind": "both"
 }

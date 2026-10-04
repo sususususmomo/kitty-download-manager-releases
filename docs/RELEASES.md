@@ -7,6 +7,8 @@ Le workflow **Kitty releases** prépare les archives, vérifie les versions et l
 - [Kitty Backend v8.31](https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/v8.31) : trois installateurs, `SHA256SUMS`, release « Latest ».
 - [Kitty Firefox v8.36](https://github.com/sususususmomo/kitty-download-manager-releases/releases/tag/frontend-v8.36) : XPI non signé, archive complète, validation et `SHA256SUMS`.
 
+Les [résultats de publication](validation-releases-v8.36.json) enregistrent le workflow réussi, les huit empreintes publiques et la reconnaissance des trois archives par la recherche de mises à jour native.
+
 Les tags frontend portent le préfixe `frontend-v` pour éviter une collision avec une version backend de même numéro. Les tags backend gardent `v`, requis par le client déjà installé. La recherche native consulte `/releases/latest` : seule une release backend peut donc recevoir « Latest ». Les noms de ses archives correspondent au client existant. Les premières installations de l’extension v8.36 conservent leurs liens vers la branche `backend-installers-v8.31`.
 
 ## Utiliser le workflow
