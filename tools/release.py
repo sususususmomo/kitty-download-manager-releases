@@ -199,6 +199,18 @@ def release_list():
     return {r["tag_name"]: r for page in pages for r in page}
 
 
+def find_release(tag):
+    # A successful draft creation can precede its visibility in the list API.
+    # Retry reads, never the creation request, to avoid duplicate drafts.
+    for attempt in range(10):
+        remote = release_list().get(tag)
+        if remote:
+            return remote
+        if attempt < 9:
+            time.sleep(2)
+    raise ValueError("Created draft is not yet visible in GitHub: " + tag)
+
+
 def publish(output):
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("Release writes are restricted to main")
@@ -249,8 +261,13 @@ def publish(output):
             gh("release", "create", tag, "--repo", REPO, "--draft", "--latest=false",
                "--target", manifest["source_commit"], "--title", item["title"],
                "--notes-file", str(folder / "NOTES.md"))
-            remote = release_list()[tag]
+            remote = find_release(tag)
         if remote["draft"]:
+            if not remote["assets"] and remote.get("target_commitish") != manifest["source_commit"]:
+                gh("release", "edit", tag, "--repo", REPO, "--draft", "--latest=false",
+                   "--target", manifest["source_commit"], "--title", item["title"],
+                   "--notes-file", str(folder / "NOTES.md"))
+                remote = api(f"releases/{remote['id']}")
             missing = check_assets(remote, item["assets"], allow_missing=True)
             if missing:
                 gh("release", "upload", tag, *[str(folder / name) for name in missing], "--repo", REPO)

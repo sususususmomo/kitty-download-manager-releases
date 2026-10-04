@@ -49,6 +49,8 @@ class FakeGitHub:
         self.writes = []
         self.latest = "v8.18"
         self.corrupt_upload = False
+        self.visibility_delay = 0
+        self.remaining_hidden_reads = 0
 
     def api(self, path):
         if path == "releases/latest":
@@ -63,6 +65,9 @@ class FakeGitHub:
             if "--paginate" in args:
                 # Include an old public release to exercise Latest preflight.
                 old = {"tag_name": "v8.18", "draft": False, "prerelease": False}
+                if self.remaining_hidden_reads:
+                    self.remaining_hidden_reads -= 1
+                    return json.dumps([[old]])
                 return json.dumps([[old, *self.releases.values()]])
             if "matching-refs" in args[-1]:
                 return "[]"
@@ -70,7 +75,9 @@ class FakeGitHub:
         self.writes.append(args)
         command, tag = args[1:3]
         if command == "create":
+            self.remaining_hidden_reads = self.visibility_delay
             self.releases[tag] = {"id": len(self.releases) + 1, "tag_name": tag, "draft": True,
+                                  "target_commitish": args[args.index("--target") + 1],
                                   "prerelease": False, "assets": [], "html_url": "https://github.com/" + release.REPO + "/releases/tag/" + tag}
         elif command == "upload":
             for path in args[3:args.index("--repo")]:
@@ -78,7 +85,10 @@ class FakeGitHub:
                 self.releases[tag]["assets"].append({"name": item["name"], "size": item["size"],
                     "state": "uploaded", "digest": "sha256:" + ("0" * 64 if self.corrupt_upload else item["sha256"])})
         elif command == "edit":
-            self.releases[tag]["draft"] = False
+            if "--draft=false" in args:
+                self.releases[tag]["draft"] = False
+            if "--target" in args:
+                self.releases[tag]["target_commitish"] = args[args.index("--target") + 1]
             if "--latest=true" in args:
                 self.latest = tag
         else:
@@ -195,6 +205,25 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(uploads), 1)
         self.assertEqual(Path(uploads[0][3]).name, removed["name"])
         self.assertFalse(any(c[1] == "edit" for c in github.writes))
+
+    def test_delayed_draft_visibility_retries_reads_without_duplicate_creation(self):
+        manifest = self.build()
+        github = FakeGitHub()
+        github.visibility_delay = 2
+        self.publish(manifest, github)
+        creates = [c for c in github.writes if c[1] == "create"]
+        self.assertEqual(len(creates), 2)
+        self.assertEqual(github.latest, "v8.31")
+
+    def test_empty_draft_can_be_retargeted_after_fixing_release_tools(self):
+        manifest = self.build(mode="draft", kind="frontend")
+        github = FakeGitHub()
+        github.gh("release", "create", "frontend-v8.36", "--target", "0" * 40)
+        github.writes.clear()
+        self.publish(manifest, github)
+        self.assertEqual(github.releases["frontend-v8.36"]["target_commitish"], manifest["source_commit"])
+        self.assertTrue(github.releases["frontend-v8.36"]["draft"])
+        self.assertFalse(any("--draft=false" in c for c in github.writes))
 
     def test_bad_remote_digest_keeps_release_in_draft(self):
         manifest = self.build()
