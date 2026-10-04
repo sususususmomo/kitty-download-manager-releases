@@ -30,7 +30,7 @@ To test: install the extension on Firefox 140 or later, open its toolbar popup, 
 
 The extension sends the URLs selected for downloads and requested download operations to this local native host. The host contacts the selected media websites to obtain metadata and download the media. The manifest declares required `websiteActivity` because Native Messaging transmission must be declared even when the receiver is local. Kitty does not send browsing history, analytics or telemetry to its developer. The separate privacy statement describes local history and optional YouTube sessions.
 
-Source JavaScript is human-readable and included directly in the XPI; there is no minification, transpilation or external build step. The complete source and tests are available on the `frontend-test-v8.37-20261003` branch of the linked GitHub repository. `python tools/build-packages.py` creates the frontend XPI and the three backend-only ZIPs. Test harness files are included only in temporary CI XPIs, not in the distributed XPI.
+Source JavaScript is human-readable and included directly in the XPI; there is no minification, transpilation or external build step. The complete source and tests are available on the `frontend-test-v8.37-20261004` branch of the linked GitHub repository. `python tools/build-packages.py` creates the frontend XPI and the three backend-only ZIPs. Test harness files are included only in temporary CI XPIs, not in the distributed XPI.
 
 ## Confidentialité et permissions
 

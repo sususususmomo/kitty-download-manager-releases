@@ -24,7 +24,7 @@ Windows and macOS installers set up private dependencies. On Linux, install Pyth
 
 Open Kitty in Firefox: the installed backend is detected automatically.
 
-**Firefox extension:** requires Firefox 140+. Mozilla signing is pending. For temporary testing, extract the [extension sources](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.36/kitty-download-manager-v8.36.zip), then load `extension/manifest.json` through `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
+**Firefox extension:** requires Firefox 140+. Mozilla signing is pending. For temporary testing, extract the [extension sources](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), then load `extension/manifest.json` through `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
 
 ---
 
@@ -46,4 +46,4 @@ Les installateurs Windows et macOS préparent des dépendances privées. Sous Li
 
 Ouvrez Kitty dans Firefox : le backend installé est détecté automatiquement.
 
-**Extension Firefox :** nécessite Firefox 140 ou plus récent. La signature Mozilla est en attente. Pour un test temporaire, décompressez les [sources de l’extension](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.36/kitty-download-manager-v8.36.zip), puis chargez `extension/manifest.json` depuis `about:debugging` → **Ce Firefox** → **Charger un module temporaire**.
+**Extension Firefox :** nécessite Firefox 140 ou plus récent. La signature Mozilla est en attente. Pour un test temporaire, décompressez les [sources de l’extension](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), puis chargez `extension/manifest.json` depuis `about:debugging` → **Ce Firefox** → **Charger un module temporaire**.

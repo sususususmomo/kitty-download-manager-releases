@@ -27,3 +27,5 @@ and ./install.sh
 ```
 
 Recharger l’extension temporaire dans `about:debugging`.
+
+Validation: [Windows](https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37168961930), [Mac Intel / Apple Silicon](https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37168961928), [Mozilla / Firefox comparison](https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/37168961938). All checks passed; 19 actual toolbar-popup captures per OS, 90 identical Gecko fixture comparisons, plus 16 local scrolled comparisons. Static captures freeze animations and native indeterminate progress; they do not measure animation fluidity. Details: `validation-frontend-v8.37.json`.
