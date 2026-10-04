@@ -211,6 +211,69 @@ async function interactionAndSecurityChecks(page) {
   assert.deepEqual(result.allowed,['https://example.com/a?x=%22quoted%22&y=%3Ctag%3E','http://example.com/video']);
 }
 
+async function imageModeChecks(browser) {
+  const tested=[];
+  for(const language of ['fr','en']) for(const height of [320,520]) {
+    const {page,errors}=await loadPopup(browser,current,language,{width:410,height});
+    try {
+      await page.evaluate(async()=>{
+        window.__diagnostic.compatibility.backend_version='8.32';
+        window.__store.selectedMode='mp3';
+        window.__store.playlistMode=true;
+        window.__store.playlistUrl='https://example.com/album';
+        await restoreModeSelection();
+      });
+      await page.locator('#modeButton').click();
+      await page.locator('#imageOnlyModeToggle').click();
+      assert.equal(await page.locator('.modeMenuItem[data-mode]:disabled').count(),5);
+      assert.equal(await page.locator('#playlistModeToggle').isDisabled(),true);
+      assert.equal(await page.locator('#imageOnlyModeToggle').isEnabled(),true);
+      assert.equal(await page.locator('#imageOnlyModeToggle').getAttribute('aria-pressed'),'true');
+      assert.equal(await page.locator('#playlistPanel').isVisible(),false);
+      assert.equal(await page.locator('#modeButtonLabel').textContent(),language==='en'?'Image only':'Image uniquement');
+      assert.equal(await page.evaluate(()=>modeEl.value),'mp3');
+      assert.equal(await page.evaluate(()=>window.__store.imageOnlyMode),true);
+      assert.equal(await page.evaluate(()=>window.__store.selectedMode),'mp3');
+      assert.equal(await page.evaluate(()=>window.__store.playlistMode),true);
+      assert.equal(await page.evaluate(()=>{
+        const menu=modeMenuEl.getBoundingClientRect();
+        const image=imageOnlyModeToggleEl.getBoundingClientRect();
+        return image.top>=menu.top&&image.bottom<=menu.bottom&&menu.bottom<=innerHeight;
+      }),true,'Image toggle remains reachable on a small popup');
+      await page.screenshot({path:path.join(output,`image-mode-${height}-${language}.png`)});
+      await page.locator('#modeButton').click();
+      await page.locator('#download').click();
+      assert.ok(await page.evaluate(()=>window.__calls.some(call=>call.action==='download'&&call.mode==='image')));
+      await page.evaluate(async()=>{
+        imageOnlyModeEnabled=false;modeEl.value='1080';playlistModeEnabled=false;
+        await restoreModeSelection();
+      });
+      assert.equal(await page.evaluate(()=>effectiveDownloadMode()),'image','Restored image selection');
+      await page.locator('#modeButton').click();
+      await page.locator('#imageOnlyModeToggle').click();
+      assert.equal(await page.locator('.modeMenuItem[data-mode]:disabled').count(),0);
+      assert.equal(await page.locator('#playlistModeToggle').isEnabled(),true);
+      assert.equal(await page.evaluate(()=>modeEl.value),'mp3');
+      assert.equal(await page.locator('#playlistPanel').isVisible(),true);
+      assert.equal(await page.evaluate(()=>window.__store.imageOnlyMode),false);
+
+      await page.evaluate(async()=>{
+        setImageOnlyMode(true);
+        setModeMenuOpen(false);
+        window.__calls=[];
+        nativeCompatibilityCache=null;
+        window.__diagnostic.compatibility.backend_version='8.31';
+      });
+      await page.locator('#download').click();
+      assert.equal(await page.evaluate(()=>window.__calls.filter(call=>call.action==='download').length),0);
+      assert.match(await page.locator('#status').textContent(),/v8\.32/,'Older backend has a clear update message');
+      assert.deepEqual(errors,[]);
+      tested.push({language,height,disabledOptions:true,storageAndPreviousMode:true,imageSubmitted:true,oldBackendGuard:true});
+    } finally {await page.close();}
+  }
+  return tested;
+}
+
 (async()=>{
   fs.mkdirSync(output,{recursive:true});
   // This offline fixture runs inside an already isolated CI/container sandbox.
@@ -254,6 +317,8 @@ async function interactionAndSecurityChecks(page) {
     try {await interactionAndSecurityChecks(check.page);assert.deepEqual(check.errors,[]);report.interactionAndSecurity=true;}
     finally {await check.page.close();}
     console.log('Boutons, URLs, textes non fiables, stabilité des nodes et SVG : OK');
+    report.imageMode=await imageModeChecks(browser);
+    console.log('Mode image : options grisées, persistance, restauration, petite popup et backend ancien : OK');
   } catch(error) {report.error=String(error.stack||error);throw error;}
   finally {fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2)+'\n');await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

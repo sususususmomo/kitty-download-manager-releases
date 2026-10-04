@@ -72,8 +72,7 @@ async function downloadFromContextMenu(info, tab) {
   const url = resolveContextDownloadUrl(info, tab);
   if (!url) return { ok: false, error: "URL HTTP/HTTPS requise." };
 
-  const saved = await browser.storage.local.get("selectedMode");
-  const mode = saved?.selectedMode || "1080";
+  const mode = await savedDownloadMode();
   const result = await nativeMessage({
     action: "download",
     url,
@@ -83,6 +82,11 @@ async function downloadFromContextMenu(info, tab) {
 
   invalidateStatus();
   return { ...result, selectedMode: mode, url };
+}
+
+async function savedDownloadMode() {
+  const saved = await browser.storage.local.get(["selectedMode", "imageOnlyMode"]);
+  return saved?.imageOnlyMode ? "image" : saved?.selectedMode || "1080";
 }
 
 
@@ -116,6 +120,8 @@ async function nativeMessage(payload) {
         error_hint: comp?.message || "Lance l’updater puis recharge l’extension."
       };
     }
+    const featureError = KittyShared.downloadModeError(payload?.mode, comp);
+    if (featureError) return featureError;
   }
   return rawNativeMessage(payload);
 }
@@ -156,8 +162,7 @@ browser.runtime.onMessage.addListener((message) => {
         return { ok: false, error: "URL HTTP/HTTPS requise." };
       }
 
-      const saved = await browser.storage.local.get("selectedMode");
-      const mode = saved?.selectedMode || "1080";
+      const mode = await savedDownloadMode();
       const result = await nativeMessage({
         action: "download",
         url,
@@ -243,4 +248,3 @@ if (browser.storage?.onChanged?.addListener) {
     }
   });
 }
-

@@ -2,6 +2,16 @@
   const VALID_LANGUAGES = new Set(["fr", "en"]);
   const FR_EN = Object.freeze(
 {
+  "Image": "Image",
+  "Image uniquement": "Image only",
+  "Miniature ou pochette, sans audio ni vidéo": "Thumbnail or cover, without audio or video",
+  "Télécharger l’image": "Download image",
+  "Le mode image nécessite Kitty Backend v8.32 ou plus récent.": "Image mode requires Kitty Backend v8.32 or later.",
+  "Mets à jour le backend depuis les réglages, puis rouvre Kitty.": "Update the backend from Settings, then reopen Kitty.",
+  "Aucune image disponible": "No image available",
+  "Ce contenu ne fournit aucune miniature ou pochette accessible.": "This content has no accessible thumbnail or cover.",
+  "Fichier image invalide": "Invalid image file",
+  "Le site n’a pas fourni de fichier image exploitable.": "The website did not provide a usable image file.",
   "Télécharger l’installateur": "Download installer",
   "Rechercher une mise à jour": "Check for a backend update",
   "Réessayer la connexion": "Retry connection",

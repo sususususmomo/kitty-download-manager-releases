@@ -19,6 +19,7 @@ from platform_support import (WINDOWS, MACOS, terminate_own_children, process_al
                               configure_worker_job, watch_worker_controls)
 from errors import classify_backend_error
 from runtime_storage import append_log
+from image_download import download_image, image_thumbnails
 from queue_store import (STATE_VERSION, default_state, read_state, mutate_state,
                          claim_next_job, update_job, insert_at_lane_head, release_failed_start)
 
@@ -591,7 +592,7 @@ def cleanup_youtube_job_cookiefile(path):
 
 
 IMAGE_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".svg",
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".svg", ".tif", ".tiff",
 }
 NON_MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | {
     ".json", ".vtt", ".srt", ".ass", ".lrc", ".description", ".part", ".ytdl",
@@ -783,6 +784,11 @@ def validate_extracted_info(info, mode):
     if not isinstance(info, dict):
         raise RuntimeError("L’extracteur n’a pas renvoyé de média.")
 
+    if mode == "image":
+        if not image_thumbnails(info):
+            raise RuntimeError("Aucune miniature ou pochette disponible pour ce contenu.")
+        return
+
     if info.get("entries") is not None or str(info.get("_type") or "").lower() in {
         "playlist", "multi_video"
     }:
@@ -853,13 +859,17 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
         "retries": 3,
         "extractor_retries": 2,
         "fragment_retries": 3,
-        # Thumbnail téléchargée pour l'intégration/tags, jamais comme résultat final.
+        # Media modes embed the thumbnail; image mode keeps it as the result.
         "writethumbnail": True,
         "postprocessors": [
             {"key": "FFmpegMetadata"},
         ],
     }
-    if mode == "1080":
+    if mode == "image":
+        opts.update({"skip_download": True, "ignore_no_formats_error": True,
+                     "extract_flat": "in_playlist", "write_all_thumbnails": False,
+                     "postprocessors": []})
+    elif mode == "1080":
         opts.update({"format": "bv*[height<=1080][vcodec!=none]+ba[acodec!=none]/b[height<=1080][vcodec!=none][acodec!=none]/bv*[height<=1080]+ba/b[height<=1080]/b", "merge_output_format": "mp4"})
         opts["postprocessors"].append({"key": "EmbedThumbnail"})
     elif mode == "720":
@@ -894,7 +904,7 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
 def main():
     global current_job_id
 
-    log(f"worker V8.31 lancé pid={os.getpid()} argv={sys.argv[1:]}")
+    log(f"worker V8.32 lancé pid={os.getpid()} argv={sys.argv[1:]}")
     if len(sys.argv) != 2:
         return 2
 
@@ -945,6 +955,13 @@ def main():
         last_bytes = None
         last_time = time.monotonic()
         saw_progress = False
+
+        def check_download_control():
+            action = control_action(job_id)
+            if cancel_requested or action == "cancel":
+                raise DownloadCancelled()
+            if action == "pause":
+                raise DownloadPaused()
 
         def progress_hook(d):
             nonlocal last_bytes, last_time, saw_progress, last_pause_check
@@ -1014,6 +1031,8 @@ def main():
                 )
 
         opts = build_opts(mode, progress_hook, output_dir, job_cookiefile)
+        # Metadata extraction must not write a collection thumbnail early.
+        opts["writethumbnail"] = False
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             if active_pause_requested(job_id):
@@ -1060,9 +1079,20 @@ def main():
             download_opts["outtmpl"] = output_template_for_stem(output_dir, clean_stem)
 
             with yt_dlp.YoutubeDL(download_opts) as download_ydl:
-                result = download_ydl.process_ie_result(info, download=True)
+                if mode == "image":
+                    image = download_image(download_ydl, info, output_dir, clean_stem,
+                                           probe_media_streams if shutil.which("ffprobe") else None,
+                                           check_download_control)
+                    filepath = str(image)
+                    size = image.stat().st_size
+                    update_active(filepath=filepath, downloaded=size, total=size,
+                                  estimated_total=None, speed=None, eta=0)
+                    result = info
+                else:
+                    result = download_ydl.process_ie_result(info, download=True)
 
-                filepath = None
+                if mode != "image":
+                    filepath = None
                 if not isinstance(result, dict):
                     raise RuntimeError("yt-dlp n’a pas renvoyé de résultat média valide.")
 
@@ -1099,7 +1129,7 @@ def main():
                         raise RuntimeError(
                             f"Le fichier audio final est invalide : {reason}"
                         )
-                else:
+                elif mode != "image":
                     final_media = select_final_media_path(
                         result,
                         prepared_result,
@@ -1111,8 +1141,10 @@ def main():
 
                 log(f"fichier média final validé: {filepath!r}")
 
+        if mode == "image":
+            check_download_control()
         clear_control(job_id)
-        if saw_progress:
+        if saw_progress or mode == "image":
             finish_active("finished", filepath=filepath)
             log("job terminé avec succès")
         else:

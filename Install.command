@@ -47,7 +47,7 @@ kitty_download() {
         --connect-timeout 30 --max-time 600 --retry 2 --max-filesize 350000000 \
         --output "$2" "$1"
 }
-echo "Kitty Download Manager V8.31 — macOS $kitty_arch"
+echo "Kitty Download Manager V8.32 — macOS $kitty_arch"
 echo 'Préparation de Python privé…'
 # Digests verified against Astral's immutable 20261001 release on 2026-10-03.
 kitty_asset="cpython-3.13.16+20261001-$kitty_arch-apple-darwin-install_only_stripped.tar.gz"

@@ -8,7 +8,7 @@
 
 ## English
 
-Download videos and audio from Firefox, with a queue, history and a floating download button. This repository provides Kitty’s local backend, powered by **yt-dlp** and **FFmpeg**.
+Download videos, audio and thumbnail images from Firefox, with a queue, history and a floating download button. This repository provides Kitty’s local backend, powered by **yt-dlp** and **FFmpeg**.
 
 ### Install the backend
 
@@ -22,9 +22,9 @@ Download the ZIP for your system from the [latest backend release](https://githu
 
 Windows and macOS installers set up private dependencies. On Linux, install Python 3, yt-dlp, FFmpeg and Mutagen; psutil and Deno are recommended.
 
-Open Kitty in Firefox: the installed backend is detected automatically.
+Open Kitty in Firefox: the installed backend is detected automatically. **Image only** downloads the thumbnail or cover without audio/video, using its original image format.
 
-**Firefox extension:** requires Firefox 140+. Mozilla signing is pending. For temporary testing, extract the [extension sources](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), then load `extension/manifest.json` through `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
+**Firefox extension:** requires Firefox 140+. Mozilla signing is pending. For temporary testing, extract the [extension sources](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/kitty-download-manager-v8.38.zip), then load `extension/manifest.json` through `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
 
 ### License
 
@@ -34,7 +34,7 @@ Kitty Download Manager is licensed under the [GNU General Public License v3.0](L
 
 ## Français
 
-Téléchargez des vidéos et de l’audio depuis Firefox, avec une file d’attente, un historique et un bouton de téléchargement flottant. Ce dépôt fournit le backend local de Kitty, basé sur **yt-dlp** et **FFmpeg**.
+Téléchargez des vidéos, de l’audio et des miniatures depuis Firefox, avec une file d’attente, un historique et un bouton de téléchargement flottant. Ce dépôt fournit le backend local de Kitty, basé sur **yt-dlp** et **FFmpeg**.
 
 ### Installer le backend
 
@@ -48,9 +48,9 @@ Téléchargez le ZIP correspondant à votre système dans la [dernière release 
 
 Les installateurs Windows et macOS préparent des dépendances privées. Sous Linux, installez Python 3, yt-dlp, FFmpeg et Mutagen ; psutil et Deno sont recommandés.
 
-Ouvrez Kitty dans Firefox : le backend installé est détecté automatiquement.
+Ouvrez Kitty dans Firefox : le backend installé est détecté automatiquement. **Image uniquement** récupère la miniature ou la pochette sans audio/vidéo, dans son format image d’origine.
 
-**Extension Firefox :** nécessite Firefox 140 ou plus récent. La signature Mozilla est en attente. Pour un test temporaire, décompressez les [sources de l’extension](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.37/kitty-download-manager-v8.37.zip), puis chargez `extension/manifest.json` depuis `about:debugging` → **Ce Firefox** → **Charger un module temporaire**.
+**Extension Firefox :** nécessite Firefox 140 ou plus récent. La signature Mozilla est en attente. Pour un test temporaire, décompressez les [sources de l’extension](https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/frontend-v8.38/kitty-download-manager-v8.38.zip), puis chargez `extension/manifest.json` depuis `about:debugging` → **Ce Firefox** → **Charger un module temporaire**.
 
 ### Licence
 

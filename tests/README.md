@@ -1,5 +1,11 @@
 # Tests de régression — Kitty Download Manager
 
+## Mode Image uniquement (frontend v8.38 / backend v8.32)
+
+`python tests/test-image-download.py` exige le vrai module yt-dlp et utilise uniquement un serveur HTTP local. Les tests couvrent les miniatures et les pochettes de collections, l’absence de requêtes audio/vidéo, les images manquantes/invalides, le repli sur une miniature disponible, le format d’origine, les noms uniques et l’annulation. Les validations Windows et macOS exécutent cette suite avec le Python et le backend réellement installés.
+
+`node tests/test-image-mode.js` vérifie le choix du mode pour le pill et le clic droit. `tests/test-popup-render.js` teste aussi les options grisées, la persistance, le retour au format précédent et le message de mise à jour pour un ancien backend dans Firefox, en français et en anglais, y compris avec une petite popup. Les captures des vraies popups Windows/macOS incluent le nouveau menu et la restauration après réouverture.
+
 Depuis la racine du projet :
 
 ```bash

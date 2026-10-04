@@ -24,7 +24,9 @@ class BackendPackagingTests(unittest.TestCase):
             for platform in packages.PLATFORMS:
                 source = packages.stage_backend(platform, Path(directory) / platform)
                 self.assertFalse((source / "extension").exists())
-                self.assertEqual(installer_support.source_backend_version(source), "8.31")
+                self.assertEqual(installer_support.source_backend_version(source), json.loads((ROOT / "backend.json").read_text())["version"])
+                self.assertTrue((source / "native-host/image_download.py").is_file())
+                self.assertTrue((source / "LICENSE").is_file())
                 self.assertEqual(maintenance._source_release_info(source)["protocol"], 1)
 
     def test_bad_metadata_is_not_replaced_by_frontend_metadata(self):

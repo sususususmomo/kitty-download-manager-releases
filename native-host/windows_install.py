@@ -23,7 +23,7 @@ from installer_support import (check_private_path, atomic_bytes, atomic_json, ve
                                safe_extract, native_query, checked_version_path, current_install,
                                paused_maintenance, source_backend_version)
 
-BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "errors.py", "app_paths.py",
+BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "errors.py", "app_paths.py",
                  "compatibility.py", "runtime_storage.py", "queue_store.py", "platform_support.py",
                  "windows_install.py", "installer_support.py")
 HOST_NAME = "com.kitty.download_manager"
@@ -40,7 +40,7 @@ def app_root():
 
 def github_binary(repo, asset_name, stage, executable_names):
     url = f"https://api.github.com/repos/{repo}/releases/latest"
-    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.31",
+    request = Request(url, headers={"User-Agent": "Kitty-Download-Manager-Windows/8.32",
                                    "Accept": "application/vnd.github+json"})
     with urlopen(request, timeout=30) as response:
         release = json.loads(response.read(4_000_000))
@@ -201,6 +201,8 @@ def install(args):
     if (source / "extension").is_dir():
         shutil.copytree(source / "extension", stage / "extension")
     shutil.copy2(source / "THIRD-PARTY-NOTICES.md", stage / "THIRD-PARTY-NOTICES.md")
+    if (source / "LICENSE").is_file():
+        shutil.copy2(source / "LICENSE", stage / "LICENSE")
     if not args.no_dependencies:
         print("Preparation de FFmpeg et Deno...", flush=True)
         downloads = [github_binary("yt-dlp/FFmpeg-Builds", "ffmpeg-master-latest-win64-gpl.zip", stage, ("ffmpeg.exe", "ffprobe.exe")),

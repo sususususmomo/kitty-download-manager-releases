@@ -111,6 +111,17 @@ path.unlink()
             media.unlink(missing_ok=True)
             media.with_suffix(".opus").unlink(missing_ok=True)
 
+    def test_04_image_only_without_media_bytes(self):
+        root = windows_install.app_root()
+        current = windows_install.checked_version_path(root, windows_install.current_install(root))
+        env = {**os.environ, "KITTY_IMAGE_NATIVE_DIR": str(current / "backend"),
+               "PATH": str(current / "bin") + os.pathsep + os.environ.get("PATH", "")}
+        proc = subprocess.run([str(current / "runtime/python.exe"), "-I", "-B",
+                               str(SOURCE / "tests/test-image-download.py")], env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        print(proc.stderr.decode("utf-8", "replace"), flush=True)
+
     def test_99_uninstall_preserves_data_and_removes_native_registration(self):
         import winreg
         root = windows_install.app_root()

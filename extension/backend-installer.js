@@ -1,11 +1,11 @@
 // Public GitHub downloads. Only an explicit click opens a URL; no native host
 // or remote JavaScript is needed to obtain the first installer.
 (() => {
-  const BASE = "https://github.com/sususususmomo/kitty-download-manager-releases/raw/refs/heads/backend-installers-v8.31/";
+  const BASE = "https://github.com/sususususmomo/kitty-download-manager-releases/raw/refs/heads/backend-installers-v8.32/";
   const INSTALLERS = Object.freeze({
-    linux: Object.freeze({label: "Linux", file: "kitty-backend-v8.31-linux.zip", instruction: "Décompresse l’archive, puis lance install.sh dans un terminal."}),
-    win: Object.freeze({label: "Windows x64", actionLabel: "Windows", file: "kitty-backend-v8.31-windows-x64.zip", instruction: "Décompresse l’archive, puis double-clique sur Install.cmd."}),
-    mac: Object.freeze({label: "macOS · Intel / Apple Silicon", actionLabel: "macOS", file: "kitty-backend-v8.31-macos.zip", instruction: "Décompresse l’archive, puis double-clique sur Install.command."})
+    linux: Object.freeze({label: "Linux", file: "kitty-backend-v8.32-linux.zip", instruction: "Décompresse l’archive, puis lance install.sh dans un terminal."}),
+    win: Object.freeze({label: "Windows x64", actionLabel: "Windows", file: "kitty-backend-v8.32-windows-x64.zip", instruction: "Décompresse l’archive, puis double-clique sur Install.cmd."}),
+    mac: Object.freeze({label: "macOS · Intel / Apple Silicon", actionLabel: "macOS", file: "kitty-backend-v8.32-macos.zip", instruction: "Décompresse l’archive, puis double-clique sur Install.command."})
   });
   function selectInstaller(platform) {
     if (platform?.os === "win" && platform.arch !== "x86-64") return null;

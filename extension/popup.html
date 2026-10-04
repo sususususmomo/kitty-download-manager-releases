@@ -122,6 +122,7 @@
       z-index: 100;
     }
     .modeMenu[hidden] { display: none; }
+    .modeMenu { max-height: max(100px, calc(100vh - 120px)); overflow-y: auto; }
     .modeMenuItem {
       width: 100%;
       min-height: 35px;
@@ -139,6 +140,11 @@
     }
     .modeMenuItem:hover {
       background: rgba(255,255,255,.055);
+    }
+    .modeMenuItem:disabled {
+      opacity: .35;
+      cursor: default;
+      background: transparent;
     }
     .modeMenuItem.active {
       background: rgba(42,98,187,.20);
@@ -1515,6 +1521,14 @@
         <span>
           <span class="playlistMenuTitle">Playlist</span>
           <span class="playlistMenuSub">Utiliser le format sélectionné</span>
+        </span>
+        <span class="modeCheck">✓</span>
+      </button>
+
+      <button id="imageOnlyModeToggle" class="modeMenuItem playlistMenuItem" type="button" aria-pressed="false">
+        <span>
+          <span class="playlistMenuTitle">Image uniquement</span>
+          <span class="playlistMenuSub">Miniature ou pochette, sans audio ni vidéo</span>
         </span>
         <span class="modeCheck">✓</span>
       </button>

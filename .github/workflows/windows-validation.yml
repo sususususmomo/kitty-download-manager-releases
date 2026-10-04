@@ -95,6 +95,7 @@ jobs:
           package-manager-cache: false
       - run: bash test.sh
       - run: node tests/test-backend-bootstrap.js
+      - run: node tests/test-image-mode.js
       - run: python tests/test-backend-packaging.py
       - run: python tests/test-windows-port.py
       - run: python tests/test-visual-capture.py

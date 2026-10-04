@@ -1,0 +1,10 @@
+{
+  "frontend_version": "8.38",
+  "backend_version": "8.32",
+  "native_protocol": 1,
+  "status": "pending",
+  "tested_application_commit": "0000000000000000000000000000000000000000",
+  "windows_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/1",
+  "macos_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/2",
+  "publication_checks_run": "https://github.com/sususususmomo/kitty-download-manager-releases/actions/runs/3"
+}

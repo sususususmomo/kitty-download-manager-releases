@@ -18,7 +18,7 @@ MODES = ("dry-run", "draft", "publish")
 KINDS = ("both", "frontend", "backend")
 INSTALLERS = ("install.sh", "uninstall.sh", "update.sh", "Install.cmd",
               "Install.ps1", "Install.command", "Uninstall.command",
-              "backend.json", "THIRD-PARTY-NOTICES.md")
+              "backend.json", "LICENSE", "THIRD-PARTY-NOTICES.md")
 
 
 def run(*args):

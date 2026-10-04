@@ -73,7 +73,7 @@ DEFAULT_OUTPUT_DIR = default_output_dir()
 DOWNLOADS_DIR = DEFAULT_OUTPUT_DIR.parent
 
 STATE_BACKUP_DIR = CACHE_DIR / "state-backups"
-APP_VERSION = "8.31"
+APP_VERSION = "8.32"
 UPDATE_CACHE_FILE = CACHE_DIR / "update-check.json"
 KITTY_RELEASE_CACHE_FILE = CACHE_DIR / "kitty-release-check.json"
 UPDATE_BACKUP_DIR = CACHE_DIR / "update-backups"
@@ -1786,7 +1786,7 @@ def enqueue_playlist(url, mode, output_dir=None):
 
 
 def enqueue(url, mode, force=False, output_dir=None):
-    if not isinstance(mode, str) or mode not in {"1080", "720", "best", "audio", "mp3"}:
+    if not isinstance(mode, str) or mode not in {"1080", "720", "best", "audio", "mp3", "image"}:
         return {"ok": False, "error": "Format de téléchargement invalide."}
     url = normalize_download_url(url)
 

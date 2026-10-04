@@ -37,6 +37,7 @@ const modeButtonLabelEl = document.getElementById("modeButtonLabel");
 const modeMenuEl = document.getElementById("modeMenu");
 const modeMenuItems = [...document.querySelectorAll(".modeMenuItem[data-mode]")];
 const playlistModeToggleEl = document.getElementById("playlistModeToggle");
+const imageOnlyModeToggleEl = document.getElementById("imageOnlyModeToggle");
 const playlistModeBadgeEl = document.getElementById("playlistModeBadge");
 const playlistPanelEl = document.getElementById("playlistPanel");
 const playlistUrlEl = document.getElementById("playlistUrl");
@@ -157,7 +158,17 @@ const FORMAT_LONG_LABELS = Object.freeze({
 });
 
 let playlistModeEnabled = false;
+let imageOnlyModeEnabled = false;
 let modeMenuOpen = false;
+
+function effectiveDownloadMode() {
+  return imageOnlyModeEnabled ? "image" : modeEl.value || "1080";
+}
+
+function downloadButtonLabel() {
+  return imageOnlyModeEnabled ? "Télécharger l’image"
+    : playlistModeEnabled ? "Ajouter la playlist" : "Ajouter au téléchargement";
+}
 
 function classifyCollectionUrl(value) {
   try {
@@ -235,23 +246,27 @@ function updatePlaylistUrlStatus(message = null, kind = null) {
 
 function updateModePickerUI() {
   const selectedMode = modeEl.value || "1080";
-  modeButtonLabelEl.textContent = FORMAT_LONG_LABELS[selectedMode] || selectedMode;
+  modeButtonLabelEl.textContent = I18N.tr(imageOnlyModeEnabled ? "Image uniquement"
+    : FORMAT_LONG_LABELS[selectedMode] || selectedMode);
 
   modeMenuItems.forEach(item => {
-    const active = item.dataset.mode === selectedMode;
+    const active = !imageOnlyModeEnabled && item.dataset.mode === selectedMode;
+    item.disabled = imageOnlyModeEnabled;
     item.classList.toggle("active", active);
     item.setAttribute("aria-pressed", active ? "true" : "false");
   });
 
-  playlistModeToggleEl.classList.toggle("active", playlistModeEnabled);
-  playlistModeToggleEl.setAttribute("aria-pressed", playlistModeEnabled ? "true" : "false");
-  playlistModeBadgeEl.hidden = !playlistModeEnabled;
-  playlistPanelEl.hidden = !playlistModeEnabled;
+  const showPlaylist = playlistModeEnabled && !imageOnlyModeEnabled;
+  playlistModeToggleEl.disabled = imageOnlyModeEnabled;
+  playlistModeToggleEl.classList.toggle("active", showPlaylist);
+  playlistModeToggleEl.setAttribute("aria-pressed", showPlaylist ? "true" : "false");
+  imageOnlyModeToggleEl.classList.toggle("active", imageOnlyModeEnabled);
+  imageOnlyModeToggleEl.setAttribute("aria-pressed", imageOnlyModeEnabled ? "true" : "false");
+  playlistModeBadgeEl.hidden = !showPlaylist;
+  playlistPanelEl.hidden = !showPlaylist;
 
   if (!pendingDuplicate) {
-    downloadBtn.textContent = playlistModeEnabled
-      ? "Ajouter la playlist"
-      : "Ajouter au téléchargement";
+    downloadBtn.textContent = I18N.tr(downloadButtonLabel());
   }
 }
 
@@ -262,6 +277,7 @@ function setModeMenuOpen(open) {
 }
 
 function setPlaylistMode(enabled, { persist = true } = {}) {
+  if (imageOnlyModeEnabled) return;
   playlistModeEnabled = Boolean(enabled);
   pendingDuplicate = null;
   downloadBtn.classList.remove("duplicatePending");
@@ -278,6 +294,15 @@ function setPlaylistMode(enabled, { persist = true } = {}) {
       playlistUrl: playlistUrlEl.value
     }).catch(() => {});
   }
+}
+
+function setImageOnlyMode(enabled, { persist = true } = {}) {
+  imageOnlyModeEnabled = Boolean(enabled);
+  resetDownloadButton();
+  updateModePickerUI();
+  // Keep the menu open to make the disabled media options and the toggle visible.
+  setModeMenuOpen(true);
+  if (persist) browser.storage.local.set({ imageOnlyMode: imageOnlyModeEnabled }).catch(() => {});
 }
 
 
@@ -771,6 +796,8 @@ async function nativeMessage(payload) {
         compatibility
       };
     }
+    const featureError = KittyShared.downloadModeError(payload?.mode, compatibility);
+    if (featureError) return featureError;
   }
   return await rawNativeMessage(payload);
 }
@@ -779,9 +806,7 @@ async function nativeMessage(payload) {
 function resetDownloadButton() {
   pendingDuplicate = null;
   downloadBtn.classList.remove("duplicatePending");
-  downloadBtn.textContent = playlistModeEnabled
-    ? "Ajouter la playlist"
-    : "Ajouter au téléchargement";
+  downloadBtn.textContent = I18N.tr(downloadButtonLabel());
 }
 
 function setDownloadSectionPhase(phase, positionText = "") {
@@ -2383,6 +2408,7 @@ async function restoreModeSelection() {
   try {
     const saved = await browser.storage.local.get([
       "selectedMode",
+      "imageOnlyMode",
       "playlistMode",
       "playlistUrl"
     ]);
@@ -2394,6 +2420,7 @@ async function restoreModeSelection() {
     playlistUrlEl.value =
       typeof saved?.playlistUrl === "string" ? saved.playlistUrl : "";
     playlistModeEnabled = Boolean(saved?.playlistMode);
+    imageOnlyModeEnabled = Boolean(saved?.imageOnlyMode);
   } catch {}
 
   updateModePickerUI();
@@ -2412,7 +2439,7 @@ modeMenuEl.addEventListener("click", event => {
 modeMenuItems.forEach(item => {
   item.addEventListener("click", async () => {
     const nextMode = item.dataset.mode;
-    if (!FORMAT_LONG_LABELS[nextMode]) return;
+    if (imageOnlyModeEnabled || !FORMAT_LONG_LABELS[nextMode]) return;
 
     modeEl.value = nextMode;
     resetDownloadButton();
@@ -2430,6 +2457,10 @@ modeMenuItems.forEach(item => {
 
 playlistModeToggleEl.addEventListener("click", () => {
   setPlaylistMode(!playlistModeEnabled);
+});
+
+imageOnlyModeToggleEl.addEventListener("click", () => {
+  setImageOnlyMode(!imageOnlyModeEnabled);
 });
 
 playlistUrlEl.addEventListener("input", () => {
@@ -2564,7 +2595,7 @@ async function submitPlaylistDownload() {
 }
 
 downloadBtn.addEventListener("click", async () => {
-  if (playlistModeEnabled) {
+  if (playlistModeEnabled && !imageOnlyModeEnabled) {
     await submitPlaylistDownload();
     return;
   }
@@ -2576,7 +2607,7 @@ downloadBtn.addEventListener("click", async () => {
     const samePending =
       pendingDuplicate &&
       pendingDuplicate.url === downloadUrl &&
-      pendingDuplicate.mode === modeEl.value;
+      pendingDuplicate.mode === effectiveDownloadMode();
 
     const force = Boolean(samePending);
     statusEl.textContent = force ? "Nouveau téléchargement…" : "Démarrage…";
@@ -2584,13 +2615,13 @@ downloadBtn.addEventListener("click", async () => {
     const r = await nativeMessage({
       action: "download",
       url: downloadUrl,
-      mode: modeEl.value,
+      mode: effectiveDownloadMode(),
       force
     });
 
     if (!r?.ok) {
       if (r?.code === "already_downloaded") {
-        pendingDuplicate = { url: downloadUrl, mode: modeEl.value };
+        pendingDuplicate = { url: downloadUrl, mode: effectiveDownloadMode() };
         downloadBtn.textContent = "Retélécharger quand même";
         downloadBtn.classList.add("duplicatePending");
         setDownloadSectionPhase("duplicate");

@@ -11,7 +11,7 @@ for (const [os, arch, filename] of [
 ]) {
   const selected = selectInstaller({os, arch});
   assert.equal(new URL(selected.url).hostname, 'github.com');
-  assert.ok(selected.url.endsWith(`kitty-backend-v8.31-${filename}.zip`));
+  assert.ok(selected.url.endsWith(`kitty-backend-v8.32-${filename}.zip`));
   assert.ok(selected.instruction.includes('install.sh') || selected.instruction.includes('Install.'));
 }
 for (const platform of [{os:'win',arch:'arm'}, {os:'win',arch:'x86-32'}, {os:'android',arch:'arm'}, {}, null]) {

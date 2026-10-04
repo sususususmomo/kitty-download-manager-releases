@@ -86,6 +86,7 @@ jobs:
       - run: python -m pip install psutil
       - run: bash test.sh
       - run: node tests/test-backend-bootstrap.js
+      - run: node tests/test-image-mode.js
       - run: python tests/test-backend-packaging.py
       - run: python tests/test-macos-port.py
       - run: python tests/test-windows-port.py

@@ -29,8 +29,19 @@
       "720": "720p",
       "best": "Meilleure qualité",
       "audio": "Audio",
-      "mp3": "MP3"
+      "mp3": "MP3",
+      "image": "Image"
     })[mode] || mode || "?";
+  }
+
+  function downloadModeError(mode, compatibility) {
+    if (mode !== "image") return null;
+    const parts = String(compatibility?.backend_version || "").split(".").map(Number);
+    if (parts.length >= 2 && parts.every(Number.isFinite)
+      && (parts[0] > 8 || (parts[0] === 8 && parts[1] >= 32))) return null;
+    return {ok: false, code: "image_backend_update_required",
+      error: "Le mode image nécessite Kitty Backend v8.32 ou plus récent.",
+      error_hint: "Mets à jour le backend depuis les réglages, puis rouvre Kitty."};
   }
 
   function sourceInfo(url) {
@@ -242,6 +253,7 @@
     COLORS,
     STATE_UI,
     modeLabel,
+    downloadModeError,
     sourceInfo,
     sourceIconElement,
     jobPhase,

@@ -46,6 +46,10 @@ function popupState() {
     backendDownload: doc.getElementById("downloadBackend")?.href,
     backendDownloadVisible: Boolean(doc.getElementById("downloadBackend")?.getClientRects().length),
     downloadEnabled: !doc.getElementById("download").disabled,
+    imageOnlyMode: doc.getElementById("imageOnlyModeToggle")?.getAttribute("aria-pressed") === "true",
+    mediaOptionsDisabled: [...doc.querySelectorAll('.modeMenuItem[data-mode]')].every(button => button.disabled),
+    playlistDisabled: doc.getElementById("playlistModeToggle")?.disabled,
+    selectedMode: doc.getElementById("mode")?.value,
     sections: Object.fromEntries([...doc.querySelectorAll(".collapseSection")]
       .map(section => [section.dataset.section, !section.classList.contains("collapsed")])),
     settingsOrder: [...doc.querySelectorAll("#settingsView > .settingsGroup")].map(section => section.dataset.settingsSection),
@@ -75,7 +79,7 @@ async function command(request) {
   switch (request.action) {
     case "prepare":
       await browser.storage.local.set({
-        uiLanguage: "fr", selectedMode: "1080",
+        uiLanguage: "fr", selectedMode: "1080", imageOnlyMode: false,
         sectionStates: { download: true, queue: false, history: false },
         settingsSectionStates: { language: false, destination: false, pill: false, backend: false, cookies: false, dependencies: false, diagnostic: false, maintenance: false },
       });

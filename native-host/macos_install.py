@@ -22,7 +22,7 @@ from queue_store import queue_lock
 
 HOST_NAME = "com.kitty.download_manager"
 EXTENSION_ID = "kitty-download-manager@local"
-BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "errors.py", "app_paths.py",
+BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "errors.py", "app_paths.py",
                  "compatibility.py", "runtime_storage.py", "queue_store.py", "platform_support.py",
                  "installer_support.py", "macos_install.py")
 # Pinned provider checksums verified on 2026-10-03.
@@ -199,6 +199,8 @@ def install(args):
     if (source / "extension").is_dir():
         shutil.copytree(source / "extension", stage / "extension")
     shutil.copy2(source / "THIRD-PARTY-NOTICES.md", stage / "THIRD-PARTY-NOTICES.md")
+    if (source / "LICENSE").is_file():
+        shutil.copy2(source / "LICENSE", stage / "LICENSE")
     if not args.no_dependencies:
         print("Préparation de FFmpeg et Deno…", flush=True)
         install_binaries(stage, args.arch)

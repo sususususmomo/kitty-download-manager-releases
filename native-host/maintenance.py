@@ -43,6 +43,7 @@ UNINSTALL_BIN = BIN_DIR / "kitty-uninstall"
 BACKEND_FILES = (
     "host.py",
     "worker.py",
+    "image_download.py",
     "metadata.py",
     "errors.py",
     "app_paths.py",
@@ -434,6 +435,8 @@ def update(source: Path, allow_downgrade=False, skip_network=False) -> int:
 
     for filename in BACKEND_FILES:
         shutil.copy2(source / "native-host" / filename, stage / filename)
+    if (source / "LICENSE").is_file():
+        shutil.copy2(source / "LICENSE", stage / "LICENSE")
     for filename in ("host.py", "worker.py", "metadata.py", "migrate.py", "compatibility.py", "maintenance.py", "runtime_storage.py"):
         os.chmod(stage / filename, 0o755)
     for filename in ("errors.py", "app_paths.py", "queue_store.py"):

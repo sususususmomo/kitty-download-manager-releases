@@ -2350,7 +2350,7 @@ def test_context_menu_one_click_uses_saved_mode():
     check('CONTEXT_MENU_ID = "kitty-download-with-kitty"' in background, "ID menu contextuel absent")
     check('"Télécharger avec Kitty"' in background and '"Download with Kitty"' in background, "libellé FR/EN absent")
     check("parentId" not in background, "le clic droit ne doit pas créer de sous-menu")
-    check('browser.storage.local.get("selectedMode")' in background, "format sauvegardé non utilisé")
+    check('browser.storage.local.get(["selectedMode", "imageOnlyMode"])' in background, "format sauvegardé non utilisé")
 
     node = shutil.which("node")
     if not node:
@@ -2379,7 +2379,7 @@ global.browser = {{
     local: {{
       get: async key => {{
         if (key === 'uiLanguage') return {{uiLanguage:'fr'}};
-        if (key === 'selectedMode') return {{selectedMode:'mp3'}};
+        if (Array.isArray(key) && key.includes('selectedMode')) return {{selectedMode:'mp3'}};
         return {{}};
       }},
       set: async () => {{}}
@@ -2548,7 +2548,7 @@ def test_safe_updater_preserves_user_state():
         install_dir = home / ".local" / "lib" / "kitty-download-manager"
         host_path = install_dir / "host.py"
         host_path.write_text(
-            host_path.read_text(encoding="utf-8").replace('APP_VERSION = "8.31"', 'APP_VERSION = "8.14"', 1),
+            host_path.read_text(encoding="utf-8").replace(f'APP_VERSION = "{json.loads((ROOT / "backend.json").read_text())["version"]}"', 'APP_VERSION = "8.14"', 1),
             encoding="utf-8",
         )
 
@@ -2580,8 +2580,8 @@ def test_safe_updater_preserves_user_state():
             check=False,
         )
         check(update.returncode == 0, f"update.sh échoué:\n{update.stdout}")
-        check("8.14 → 8.31" in update.stdout, "résumé version updater absent")
-        check('APP_VERSION = "8.31"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
+        check(f"8.14 → {json.loads((ROOT / 'backend.json').read_text())['version']}" in update.stdout, "résumé version updater absent")
+        check(f'APP_VERSION = "{json.loads((ROOT / "backend.json").read_text())["version"]}"' in host_path.read_text(encoding="utf-8"), "backend non remplacé")
         equal(json.loads(settings.read_text(encoding="utf-8"))["output_dir"], "/tmp/kitty-custom", "settings perdus")
         equal((auth / "cookies.txt").read_text(encoding="utf-8"), "COOKIE-SENTINEL", "cookies perdus")
         state = json.loads(queue.read_text(encoding="utf-8"))
@@ -3492,7 +3492,7 @@ def test_playlist_ui_contract():
     check("classifyCollectionUrl" in js, "validation collection générique absente")
     check("isYoutubePlaylistUrl" not in js, "ancienne validation YouTube-only encore présente")
     check("if (!playlistModeEnabled) setModeMenuOpen(false)" in js, "menu ne reste pas ouvert en playlist")
-    check("playlistModeToggleEl.classList.toggle(\"active\", playlistModeEnabled)" in js, "surbrillance playlist absente")
+    check("playlistModeToggleEl.classList.toggle(\"active\", showPlaylist)" in js, "surbrillance playlist absente")
     check("modeMenuItems.forEach" in js and "item.classList.toggle(\"active\", active)" in js, "surbrillance format absente")
     check('type: "kitty-download-playlist"' in js, "popup ne transmet pas playlist")
     check('message.type === "kitty-download-playlist"' in bg, "background playlist absent")
@@ -3997,6 +3997,33 @@ def test_shared_queue_storage_behaviors():
     check(proc.returncode == 0, proc.stdout + proc.stderr)
 
 
+def test_image_queue_and_history_without_network():
+    with tempfile.TemporaryDirectory(prefix="kitty-image-queue-") as temporary:
+        host = load_module(NATIVE / "host.py", f"kitty_image_host_{time.time_ns()}", Path(temporary))
+        host.WORKER.parent.mkdir(parents=True, exist_ok=True)
+        host.WORKER.write_text("# isolated worker fixture", encoding="utf-8")
+        host.start_next_if_idle = lambda: None
+        host.spawn_metadata = lambda _job: None
+        url = "https://example.com/song"
+        def audio_history(data):
+            data["history"] = [{"id": "previous-audio", "url": url, "mode": "audio",
+                                "status": "finished", "output_dir": str(host.get_output_dir())}]
+        host.with_state(audio_history)
+        added = host.enqueue(url, "image")
+        check(added.get("ok"), "un audio déjà téléchargé bloque sa pochette")
+        equal(added["state"]["queue"][0]["mode"], "image")
+        equal(host.enqueue(url, "image").get("code"), "already_queued")
+        def finish_image(data):
+            image = data["queue"].pop()
+            image.update(status="finished", filepath=str(host.get_output_dir() / "image.png"))
+            data["history"].insert(0, image)
+        host.with_state(finish_image)
+        previous = host.enqueue(url, "image")
+        equal(previous.get("code"), "already_downloaded")
+        check(previous["previous"]["filepath"].endswith("image.png"), "chemin image absent de l'historique")
+        check(host.enqueue(url, "image", force=True).get("ok"), "retéléchargement image impossible")
+
+
 def main():
     print("Kitty Download Manager — tests de régression")
     print(f"Projet : {ROOT}")
@@ -4062,6 +4089,7 @@ def main():
     run_case("Migration + récupération queue.json", test_state_migration_recovery)
     run_case("Réglages + reset sûr", test_settings_and_safe_reset)
     run_case("Sémantique de la file sans réseau", test_queue_semantics_without_network)
+    run_case("Mode image : file, doublons et historique", test_image_queue_and_history_without_network)
     run_case("Noms + nettoyage des fichiers", test_worker_filename_and_cleanup_helpers)
     run_case("Clic/drag des pills compactes", test_compact_pill_click_drag_contract)
     run_case("Fond lisible du Chat ASCII", test_ascii_cat_has_readable_surface_contract)

@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "https://github.com/sususususmomo/kitty-download-manager-releases/raw/refs/heads/backend-installers-v8.31/"
+BASE = "https://github.com/sususususmomo/kitty-download-manager-releases/raw/refs/heads/backend-installers-v8.32/"
 checksums = json.loads((ROOT / "tests/backend-download-checksums.json").read_text())
 with tempfile.TemporaryDirectory(prefix="kitty-download-test-") as directory:
     for filename, expected in checksums.items():
@@ -27,6 +27,6 @@ with tempfile.TemporaryDirectory(prefix="kitty-download-test-") as directory:
             if any("/extension/" in name or name.endswith(".xpi") for name in names):
                 raise RuntimeError("L’archive backend contient une extension")
             metadata = json.loads(archive.read("kitty-download-manager/backend.json"))
-            if metadata != {"version": "8.31", "protocol": 1}:
+            if metadata != {"version": "8.32", "protocol": 1}:
                 raise RuntimeError("Métadonnées backend inattendues")
         print(f"Téléchargement public vérifié : {filename} · {len(data)} octets · SHA-256 OK", flush=True)

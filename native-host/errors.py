@@ -14,6 +14,8 @@ from app_paths import APP_NAME, APP_SLUG
 
 
 CATALOG = {
+    "image_unavailable": ("Aucune image disponible", "Ce contenu ne fournit aucune miniature ou pochette accessible.", False),
+    "image_invalid": ("Fichier image invalide", "Le site n’a pas fourni de fichier image exploitable.", True),
     "no_audio": ("Aucun flux audio disponible", "Ce contenu ne fournit aucun flux audio téléchargeable.", False),
     "no_video": ("Aucun flux vidéo disponible", "Ce contenu ne fournit aucun flux vidéo téléchargeable.", False),
     "youtube_session_expired": ("Session YouTube expirée", "Renouvelle la session dédiée YouTube dans les réglages.", True),
@@ -148,6 +150,11 @@ def classify_backend_error(
 
     if "worker introuvable" in text:
         return _entry("worker_missing", detail)
+
+    if _contains(text, "aucune miniature ou pochette", "aucune image n’a pu être téléchargée"):
+        return _entry("image_unavailable", detail)
+    if "image téléchargée invalide" in text:
+        return _entry("image_invalid", detail)
 
     if _contains(text, "aucun flux audio", "no audio formats", "audio format is not available", "no audio stream"):
         return _entry("no_audio", detail)

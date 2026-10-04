@@ -112,6 +112,16 @@ path.unlink()
             media.unlink(missing_ok=True)
             media.with_suffix(".opus").unlink(missing_ok=True)
 
+    def test_05_image_only_without_media_bytes(self):
+        root, current = self.current()
+        env = {**os.environ, "KITTY_IMAGE_NATIVE_DIR": str(current / "backend"),
+               "PATH": str(current / "bin") + os.pathsep + os.environ.get("PATH", "")}
+        result = subprocess.run([str(current / "runtime/bin/python3"), "-I", "-B",
+                                 str(SOURCE / "tests/test-image-download.py")], env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        print(result.stderr.decode("utf-8", "replace"), flush=True)
+
     def worker_control(self, action):
         root, current = self.current()
         with tempfile.TemporaryDirectory(prefix="kitty-mac-worker-") as temporary:
