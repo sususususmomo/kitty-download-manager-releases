@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("kitty_release", ROOT / "tools/release.py")
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
-PROOF = ROOT / "docs/validation-frontend-v8.36.json"
+FRONTEND_VERSION, BACKEND_VERSION = release.versions()
+PROOF = ROOT / f"docs/validation-frontend-v{FRONTEND_VERSION}.json"
 
 
 def proof_api():
@@ -134,16 +135,16 @@ class ReleaseTests(unittest.TestCase):
             media.write_bytes(b"private local file")
             manifest = self.build()
             frontend = next(r for r in manifest["releases"] if r["kind"] == "frontend")
-            self.assertEqual(frontend["tag"], "frontend-v8.36")
+            self.assertEqual(frontend["tag"], f"frontend-v{FRONTEND_VERSION}")
             self.assertFalse(frontend["latest"])
-            with zipfile.ZipFile(self.output / "frontend/kitty-download-manager-v8.36.zip") as archive:
+            with zipfile.ZipFile(self.output / f"frontend/kitty-download-manager-v{FRONTEND_VERSION}.zip") as archive:
                 names = archive.namelist()
                 self.assertTrue(all(n.startswith("kitty-download-manager/") for n in names))
                 self.assertFalse(any(media.name in n or n.endswith("release-request.json") for n in names))
-                self.assertEqual(names.count("kitty-download-manager/kitty-download-manager-v8.36-unsigned.xpi"), 1)
+                self.assertEqual(names.count(f"kitty-download-manager/kitty-download-manager-v{FRONTEND_VERSION}-unsigned.xpi"), 1)
                 self.assertTrue((archive.getinfo("kitty-download-manager/install.sh").external_attr >> 16) & 0o111)
-            with zipfile.ZipFile(self.output / "frontend/kitty-download-manager-v8.36-unsigned.xpi") as archive:
-                self.assertEqual(json.loads(archive.read("manifest.json"))["version"], "8.36")
+            with zipfile.ZipFile(self.output / f"frontend/kitty-download-manager-v{FRONTEND_VERSION}-unsigned.xpi") as archive:
+                self.assertEqual(json.loads(archive.read("manifest.json"))["version"], FRONTEND_VERSION)
                 self.assertFalse(any("native-host" in n or "tests/" in n for n in archive.namelist()))
         finally:
             media.unlink(missing_ok=True)
@@ -158,16 +159,16 @@ class ReleaseTests(unittest.TestCase):
     def test_proof_accepts_only_successful_runs_for_unchanged_application(self):
         read = proof_api()
         with patch.object(release, "api", side_effect=read), contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(release.verify_proof("8.36", "8.31"), PROOF)
+            self.assertEqual(release.verify_proof(FRONTEND_VERSION, "8.31"), PROOF)
         tree = read("git/trees/proof")
         tree["tree"][0]["sha"] = "0" * 40
         with patch.object(release, "api", side_effect=read):
             with self.assertRaisesRegex(ValueError, "Application changed"):
-                release.verify_proof("8.36", "8.31")
+                release.verify_proof(FRONTEND_VERSION, "8.31")
 
     def test_proof_refuses_failed_or_different_commit_run(self):
         read = proof_api()
-        for field, value in (("conclusion", "failure"), ("head_sha", "0" * 40),
+        for field, value in (("conclusion", "failure"), ("head_sha", "f" * 40),
                              ("event", "pull_request"), ("path", ".github/workflows/unrelated.yml")):
             def altered(path):
                 data = read(path)
@@ -176,14 +177,14 @@ class ReleaseTests(unittest.TestCase):
                 return data
             with self.subTest(field=field), patch.object(release, "api", side_effect=altered):
                 with self.assertRaisesRegex(ValueError, "did not succeed"):
-                    release.verify_proof("8.36", "8.31")
+                    release.verify_proof(FRONTEND_VERSION, "8.31")
 
     def test_uploads_verified_before_publish_and_frontend_is_never_latest(self):
         manifest = self.build()
         github = FakeGitHub()
         self.publish(manifest, github)
         self.assertEqual(github.latest, "v8.31")
-        for tag in ("frontend-v8.36", "v8.31"):
+        for tag in (f"frontend-v{FRONTEND_VERSION}", "v8.31"):
             commands = [c for c in github.writes if c[2] == tag]
             self.assertEqual([c[1] for c in commands], ["create", "upload", "edit"])
             self.assertIn("--latest=false", commands[0])
@@ -218,11 +219,11 @@ class ReleaseTests(unittest.TestCase):
     def test_empty_draft_can_be_retargeted_after_fixing_release_tools(self):
         manifest = self.build(mode="draft", kind="frontend")
         github = FakeGitHub()
-        github.gh("release", "create", "frontend-v8.36", "--target", "0" * 40)
+        github.gh("release", "create", f"frontend-v{FRONTEND_VERSION}", "--target", "0" * 40)
         github.writes.clear()
         self.publish(manifest, github)
-        self.assertEqual(github.releases["frontend-v8.36"]["target_commitish"], manifest["source_commit"])
-        self.assertTrue(github.releases["frontend-v8.36"]["draft"])
+        self.assertEqual(github.releases[f"frontend-v{FRONTEND_VERSION}"]["target_commitish"], manifest["source_commit"])
+        self.assertTrue(github.releases[f"frontend-v{FRONTEND_VERSION}"]["draft"])
         self.assertFalse(any("--draft=false" in c for c in github.writes))
 
     def test_bad_remote_digest_keeps_release_in_draft(self):
@@ -251,7 +252,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(github.writes, [])
         github.latest = "v8.31"
         self.publish(manifest, github)
-        self.assertEqual(list(github.releases), ["frontend-v8.36"])
+        self.assertEqual(list(github.releases), [f"frontend-v{FRONTEND_VERSION}"])
         self.assertEqual(github.latest, "v8.31")
 
 

@@ -1265,7 +1265,7 @@ def test_source_capsule_dom_stability_contract():
     end = popup.index("\nfunction itemTitle", start)
     block = popup[start:end]
     check(
-        "activeSourceEl.innerHTML = sourceButtonHtml" not in block,
+        "activeSourceEl.innerHTML = sourceButtonElement" not in block,
         "renderActive remplace toujours le bouton à chaque poll",
     )
 
@@ -1287,13 +1287,13 @@ def test_flat_source_capsule_contract():
     popup = (EXT / "popup.js").read_text(encoding="utf-8")
     html = (EXT / "popup.html").read_text(encoding="utf-8")
 
-    fn_start = popup.index("function sourceButtonHtml")
+    fn_start = popup.index("function sourceButtonElement")
     fn_end = popup.index("\n}\n", fn_start) + 3
     block = popup[fn_start:fn_end]
 
-    check('class="sourceBadge sourceLink' in block, "capsule source non cliquable")
-    check('<span class="sourceGlyph"' in block, "icône absente de la capsule")
-    check('<span class="sourceLabel">' in block, "label absent de la capsule")
+    check('`sourceBadge sourceLink${compactClass}`' in block, "capsule source non cliquable")
+    check('uiElement("span", "sourceGlyph")' in block, "icône absente de la capsule")
+    check('uiElement("span", "sourceLabel", source.label)' in block, "label absent de la capsule")
 
     check("background: transparent;" in html, "fond propre à l’icône non supprimé")
     check("box-shadow: none;" in html, "ombre/fond interne icône restant")
@@ -1308,10 +1308,10 @@ def test_flat_source_capsule_contract():
 def test_source_capsule_click_target_is_whole_badge():
     popup = (EXT / "popup.js").read_text(encoding="utf-8")
 
-    check('data-open-source=' in popup, "capsule sans URL source")
+    check('button.dataset.openSource = safe' in popup, "capsule sans URL source")
     check('event.target.closest?.("[data-open-source]")' in popup, "clic capsule entier non délégué")
     check("updateSourceHost(activeSourceEl, active.url, source)" in popup, "actif n’utilise pas la capsule unique")
-    check("sourceButtonHtml(job.url, source)" in popup, "queue n’utilise pas la capsule unique")
+    check("sourceButtonElement(job.url, source)" in popup, "queue n’utilise pas la capsule unique")
     check("updateSourceHost(activeSourceEl, last.url, source)" in popup, "dernier job n’utilise pas la capsule unique")
 
 
@@ -1321,10 +1321,10 @@ def test_source_icons_and_clickable_source_contract():
     popup = (EXT / "popup.js").read_text(encoding="utf-8")
     html = (EXT / "popup.html").read_text(encoding="utf-8")
 
-    check("function sourceIconSvg" in shared, "renderer SVG source absent")
-    check("sourceIconSvg," in shared, "sourceIconSvg non exporté")
-    check("function sourceButtonHtml" in popup, "bouton source absent")
-    check('data-open-source=' in popup, "URL source absente du bouton")
+    check("function sourceIconElement" in shared, "renderer SVG source absent")
+    check("sourceIconElement," in shared, "sourceIconElement non exporté")
+    check("function sourceButtonElement" in popup, "bouton source absent")
+    check('button.dataset.openSource = safe' in popup, "URL source absente du bouton")
     check("browser.tabs.create" in popup, "ouverture source onglet absente")
     check("safeSourceUrl" in popup, "validation URL source absente")
     check("button.sourceBadge:hover" in html, "hover source absent")
@@ -1367,10 +1367,8 @@ for (const [url, key, label] of cases) {{
   }}
 }}
 
-for (const key of ["youtube", "soundcloud", "tiktok", "instagram", "web"]) {{
-  const svg = ctx.KittyShared.sourceIconSvg(key);
-  if (!svg.includes("<svg")) throw new Error(`SVG absent: ${{key}}`);
-}}
+// SVG geometry and browser namespaces are exercised by test-popup-render.js.
+
 """
     result = subprocess.run(
         [node, "-e", script],

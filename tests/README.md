@@ -105,3 +105,10 @@ n’a pas encore été créée; cet état reste visible dans l’image et le rap
 
 `python3 tests/test-visual-capture.py` couvre les avertissements, les erreurs,
 les diagnostics encore en cours et les véritables défaillances du backend.
+
+
+## Rendu DOM sécurisé et comparaison Firefox (v8.37)
+
+`test-popup-render.js` charge les vrais fichiers de la popup dans Gecko avec des réponses natives hors-ligne. Il compare la géométrie des éléments et les pixels avec la v8.36 : 15 vues × français/anglais × trois hauteurs (320, 520 et 900 px). Les captures figent les animations à un instant identique ; elles ne mesurent pas leur fluidité. Les essais vérifient aussi les clics source/pause/suppression/relance, les URLs HTTP/HTTPS, les titres et erreurs contenant du HTML, les namespaces SVG et la conservation des nodes entre deux états identiques.
+
+Le job `popup-render` de `backend-downloads.yml` prépare Playwright et publie l’artefact `kitty-firefox-render-comparison`, avec les PNG avant/après et `report.json`. Les captures existantes Windows/macOS vérifient séparément la vraie popup installée et Native Messaging.

@@ -70,26 +70,40 @@
     }
   }
 
-  function sourceIconSvg(key) {
-    const svg = {
-      youtube: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="sourceIconLine" x="3" y="6" width="18" height="12" rx="4"/><path class="sourceIconFill" d="m10 9 6 3-6 3z"/></svg>`,
-      soundcloud: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M3 14v2M6 12v4M9 9v7M12 7v9M15 10v6"/><path class="sourceIconLine" d="M15 10.5a4.3 4.3 0 0 1 7 3.3A2.2 2.2 0 0 1 19.8 16H15"/></svg>`,
-      tiktok: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M14 4v10.2a4 4 0 1 1-3-3.9"/><path class="sourceIconLine" d="M14 4c.7 2 2.2 3.4 4.5 3.8"/></svg>`,
-      instagram: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="sourceIconLine" x="4" y="4" width="16" height="16" rx="5"/><circle class="sourceIconLine" cx="12" cy="12" r="3.5"/><circle class="sourceIconFill" cx="17.2" cy="6.8" r="1"/></svg>`,
-      x: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M5 4h4.2L19 20h-4.2zM19 4 5 20"/></svg>`,
-      vimeo: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M4 8c2-2.4 5-3 6-.8.7 1.5.7 5.5 1.7 7.4.4.8.8 1.2 1.3 1.2 1.4 0 4.3-3.8 5-5.5.5-1.2-.2-1.8-1-1.8-.7 0-1.5.4-2.2 1"/></svg>`,
-      twitch: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M5 4h15v10l-4 4h-4l-3 2v-2H5z"/><path class="sourceIconLine" d="M10 8v5M15 8v5"/></svg>`,
-      dailymotion: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="sourceIconLine" cx="12" cy="13" r="5"/><path class="sourceIconLine" d="M17 4v9"/></svg>`,
-      pinterest: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="sourceIconLine" cx="12" cy="12" r="8.5"/><path class="sourceIconLine" d="M10 18c1-2 1.6-4.2 2-6.6.2-1.5 1-2.4 2-2.4 1.2 0 1.8 1 1.5 2.4-.4 1.7-1.2 3-2.7 3-1.7 0-2.7-1.4-2.7-3.2 0-2.7 2-4.7 4.7-4.7"/></svg>`,
-      bandcamp: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconFill" d="M7 6h13l-4 12H3z"/></svg>`,
-      reddit: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="sourceIconLine" cx="12" cy="13" r="7"/><circle class="sourceIconFill" cx="9.5" cy="12.5" r="1"/><circle class="sourceIconFill" cx="14.5" cy="12.5" r="1"/><path class="sourceIconLine" d="M9.5 15.5c1.5.9 3.5.9 5 0M14 6l.7-2.5 3 .6"/><circle class="sourceIconLine" cx="18.5" cy="4.3" r="1.2"/></svg>`,
-      facebook: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconFill" d="M14 21v-8h2.8l.4-3H14V8.2c0-.9.3-1.6 1.7-1.6H17V4.1c-.5-.1-1.4-.1-2.3-.1-2.4 0-4 1.5-4 4.1V10H8v3h2.7v8z"/></svg>`,
-      audiomack: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="M4 17 9 7l3 5 2-3 6 8M7 17l2-4.5L12 17l2-3.4 3 3.4"/></svg>`,
-      audius: `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="sourceIconLine" d="m12 3 7 5-2.5 8L12 21l-4.5-5L5 8z"/><circle class="sourceIconLine" cx="12" cy="12" r="3"/></svg>`,
-      web: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="sourceIconLine" cx="12" cy="12" r="8.5"/><path class="sourceIconLine" d="M3.5 12h17M12 3.5c2.2 2.3 3.3 5.1 3.3 8.5S14.2 18.2 12 20.5M12 3.5C9.8 5.8 8.7 8.6 8.7 12s1.1 6.2 3.3 8.5"/></svg>`
-    };
+  // Local SVG geometry only; never parse strings supplied by a site or host.
+  const SOURCE_ICONS = Object.freeze({
+    youtube: [["rect",{"class":"sourceIconLine","x":"3","y":"6","width":"18","height":"12","rx":"4"}],["path",{"class":"sourceIconFill","d":"m10 9 6 3-6 3z"}]],
+    soundcloud: [["path",{"class":"sourceIconLine","d":"M3 14v2M6 12v4M9 9v7M12 7v9M15 10v6"}],["path",{"class":"sourceIconLine","d":"M15 10.5a4.3 4.3 0 0 1 7 3.3A2.2 2.2 0 0 1 19.8 16H15"}]],
+    tiktok: [["path",{"class":"sourceIconLine","d":"M14 4v10.2a4 4 0 1 1-3-3.9"}],["path",{"class":"sourceIconLine","d":"M14 4c.7 2 2.2 3.4 4.5 3.8"}]],
+    instagram: [["rect",{"class":"sourceIconLine","x":"4","y":"4","width":"16","height":"16","rx":"5"}],["circle",{"class":"sourceIconLine","cx":"12","cy":"12","r":"3.5"}],["circle",{"class":"sourceIconFill","cx":"17.2","cy":"6.8","r":"1"}]],
+    x: [["path",{"class":"sourceIconLine","d":"M5 4h4.2L19 20h-4.2zM19 4 5 20"}]],
+    vimeo: [["path",{"class":"sourceIconLine","d":"M4 8c2-2.4 5-3 6-.8.7 1.5.7 5.5 1.7 7.4.4.8.8 1.2 1.3 1.2 1.4 0 4.3-3.8 5-5.5.5-1.2-.2-1.8-1-1.8-.7 0-1.5.4-2.2 1"}]],
+    twitch: [["path",{"class":"sourceIconLine","d":"M5 4h15v10l-4 4h-4l-3 2v-2H5z"}],["path",{"class":"sourceIconLine","d":"M10 8v5M15 8v5"}]],
+    dailymotion: [["circle",{"class":"sourceIconLine","cx":"12","cy":"13","r":"5"}],["path",{"class":"sourceIconLine","d":"M17 4v9"}]],
+    pinterest: [["circle",{"class":"sourceIconLine","cx":"12","cy":"12","r":"8.5"}],["path",{"class":"sourceIconLine","d":"M10 18c1-2 1.6-4.2 2-6.6.2-1.5 1-2.4 2-2.4 1.2 0 1.8 1 1.5 2.4-.4 1.7-1.2 3-2.7 3-1.7 0-2.7-1.4-2.7-3.2 0-2.7 2-4.7 4.7-4.7"}]],
+    bandcamp: [["path",{"class":"sourceIconFill","d":"M7 6h13l-4 12H3z"}]],
+    reddit: [["circle",{"class":"sourceIconLine","cx":"12","cy":"13","r":"7"}],["circle",{"class":"sourceIconFill","cx":"9.5","cy":"12.5","r":"1"}],["circle",{"class":"sourceIconFill","cx":"14.5","cy":"12.5","r":"1"}],["path",{"class":"sourceIconLine","d":"M9.5 15.5c1.5.9 3.5.9 5 0M14 6l.7-2.5 3 .6"}],["circle",{"class":"sourceIconLine","cx":"18.5","cy":"4.3","r":"1.2"}]],
+    facebook: [["path",{"class":"sourceIconFill","d":"M14 21v-8h2.8l.4-3H14V8.2c0-.9.3-1.6 1.7-1.6H17V4.1c-.5-.1-1.4-.1-2.3-.1-2.4 0-4 1.5-4 4.1V10H8v3h2.7v8z"}]],
+    audiomack: [["path",{"class":"sourceIconLine","d":"M4 17 9 7l3 5 2-3 6 8M7 17l2-4.5L12 17l2-3.4 3 3.4"}]],
+    audius: [["path",{"class":"sourceIconLine","d":"m12 3 7 5-2.5 8L12 21l-4.5-5L5 8z"}],["circle",{"class":"sourceIconLine","cx":"12","cy":"12","r":"3"}]],
+    web: [["circle",{"class":"sourceIconLine","cx":"12","cy":"12","r":"8.5"}],["path",{"class":"sourceIconLine","d":"M3.5 12h17M12 3.5c2.2 2.3 3.3 5.1 3.3 8.5S14.2 18.2 12 20.5M12 3.5C9.8 5.8 8.7 8.6 8.7 12s1.1 6.2 3.3 8.5"}]],
+  });
 
-    return svg[key] || svg.web;
+  function sourceIconElement(key, ownerDocument = document) {
+    const namespace = "http://www.w3.org/2000/svg";
+    const svg = ownerDocument.createElementNS(namespace, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    const shapes = Object.prototype.hasOwnProperty.call(SOURCE_ICONS, key)
+      ? SOURCE_ICONS[key] : SOURCE_ICONS.web;
+    for (const [tag, attributes] of shapes) {
+      const shape = ownerDocument.createElementNS(namespace, tag);
+      for (const [name, value] of Object.entries(attributes)) {
+        shape.setAttribute(name, value);
+      }
+      svg.append(shape);
+    }
+    return svg;
   }
 
   function jobPhase(job) {
@@ -229,7 +243,7 @@
     STATE_UI,
     modeLabel,
     sourceInfo,
-    sourceIconSvg,
+    sourceIconElement,
     jobPhase,
     jobPercent,
     findJob,

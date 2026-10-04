@@ -4,13 +4,25 @@ const {
   STATE_UI,
   modeLabel,
   sourceInfo,
-  sourceIconSvg,
+  sourceIconElement,
   jobPhase,
   playlistPosition,
   queuePosition,
   compactPosition
 } = globalThis.KittyShared;
 const I18N = globalThis.KittyI18n;
+
+// Text stays text: no UI renderer parses titles, errors or URLs as markup.
+function uiElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = String(text ?? "");
+  return element;
+}
+
+function loadingTitleElements() {
+  return [uiElement("span", "spinner"), uiElement("span", "", I18N.tr("Récupération du titre…"))];
+}
 
 const FRONTEND_VERSION = browser.runtime.getManifest().version;
 const NATIVE_CLIENT = Object.freeze({
@@ -482,7 +494,7 @@ function showCatGame(active) {
 
   if (!cats || !active) {
     catGameEl.classList.remove("active");
-    catGameEl.innerHTML = "";
+    catGameEl.replaceChildren();
     return;
   }
 
@@ -492,10 +504,13 @@ function showCatGame(active) {
     catGameEl.children.length === 3;
 
   if (!alreadyRenderedForThisJob) {
-    catGameEl.innerHTML =
-      `<span class="catSprite catLeft">${escapeHtml(cats.left)}</span>` +
-      `<span class="catPlayField"><span class="catBall">●</span></span>` +
-      `<span class="catSprite catRight">${escapeHtml(cats.right)}</span>`;
+    const field = uiElement("span", "catPlayField");
+    field.append(uiElement("span", "catBall", "●"));
+    catGameEl.replaceChildren(
+      uiElement("span", "catSprite catLeft", cats.left),
+      field,
+      uiElement("span", "catSprite catRight", cats.right)
+    );
 
     catGameEl.dataset.jobId = String(active.id);
   }
@@ -515,7 +530,7 @@ function hideCatGame() {
   catAnim.pendingDirection = null;
   catAnim.impactDirection = 1;
   catGameEl.classList.remove("active");
-  catGameEl.innerHTML = "";
+  catGameEl.replaceChildren();
   delete catGameEl.dataset.jobId;
 }
 
@@ -923,7 +938,7 @@ function renderActive(active, state = latestState) {
     titleEl.title = I18N.tr(active.metadata_error || "");
   } else if (!titleEl.classList.contains("activeLoading")) {
     titleEl.classList.add("activeLoading");
-    titleEl.innerHTML = `<span class="spinner"></span><span>Récupération du titre…</span>`;
+    titleEl.replaceChildren(...loadingTitleElements());
   }
 
   const downloaded = active.downloaded == null ? NaN : Number(active.downloaded);
@@ -963,7 +978,7 @@ function renderQueue(queue, active = latestState.active) {
   if (signature === lastQueueSignature) return;
   lastQueueSignature = signature;
 
-  queueEl.innerHTML = "";
+  queueEl.replaceChildren();
   const pausedCount = queue.filter(job => job.paused).length;
   queueCountEl.textContent = queue.length
     ? I18N.tr(`${queue.length} en attente${pausedCount ? ` • ${pausedCount} pause` : ""}`)
@@ -976,7 +991,7 @@ function renderQueue(queue, active = latestState.active) {
   pauseQueueBtn.title = I18N.tr(latestState.queue_paused ? "Reprendre la file" : "Mettre la file en pause");
 
   if (!queue.length) {
-    queueEl.innerHTML = '<div class="empty">La file est vide.</div>';
+    queueEl.append(uiElement("div", "empty", I18N.tr("La file est vide.")));
     return;
   }
 
@@ -991,17 +1006,17 @@ function renderQueue(queue, active = latestState.active) {
     text.className = "itemText";
 
     const knownTitle = itemTitle(job);
-    let titleHtml;
+    const title = uiElement("div", "itemTitle");
 
     if (knownTitle) {
-      titleHtml = `<div class="itemTitle">${escapeHtml(knownTitle)}</div>`;
+      title.textContent = knownTitle;
     } else if (["error", "unavailable"].includes(job.metadata_status)) {
-      const detail = job.metadata_error ? ` title="${escapeHtml(job.metadata_error)}"` : "";
-      titleHtml =
-        `<div class="itemTitle metadataUnavailable"${detail}>${escapeHtml(I18N.tr("Titre indisponible"))}</div>`;
+      title.classList.add("metadataUnavailable");
+      if (job.metadata_error) title.title = job.metadata_error;
+      title.textContent = I18N.tr("Titre indisponible");
     } else {
-      titleHtml =
-        `<div class="itemTitle loadingTitle"><span class="spinner"></span><span>${escapeHtml(I18N.tr("Récupération du titre…"))}</span></div>`;
+      title.classList.add("loadingTitle");
+      title.append(...loadingTitleElements());
     }
 
     const position = queuePosition({ active, queue }, job.id);
@@ -1023,14 +1038,11 @@ function renderQueue(queue, active = latestState.active) {
       positionText = `${position.current} / ${position.total} • `;
     }
 
-    text.innerHTML = `${titleHtml}
-      <div class="itemMeta">${positionText}${escapeHtml(I18N.tr(modeLabel(job.mode)))} • ${escapeHtml(I18N.tr(positionKind))}${pauseLabel}</div>`;
+    text.append(title, uiElement("div", "itemMeta",
+      `${positionText}${I18N.tr(modeLabel(job.mode))} • ${I18N.tr(positionKind)}${pauseLabel}`));
 
     const source = sourceInfo(job.url);
-    const sourceBadgeHost = document.createElement("div");
-    sourceBadgeHost.className = "sourceBadgeHost";
-    sourceBadgeHost.innerHTML = sourceButtonHtml(job.url, source);
-    const sourceBadge = sourceBadgeHost.firstElementChild;
+    const sourceBadge = sourceButtonElement(job.url, source);
 
     const actions = document.createElement("div");
     actions.className = "queueRowActions";
@@ -1085,10 +1097,10 @@ function renderHistory(history) {
 
   if (signature === lastHistorySignature) return;
   lastHistorySignature = signature;
-  historyEl.innerHTML = "";
+  historyEl.replaceChildren();
 
   if (!history.length) {
-    historyEl.innerHTML = `<div class="empty">${escapeHtml(I18N.tr("Aucun téléchargement terminé."))}</div>`;
+    historyEl.append(uiElement("div", "empty", I18N.tr("Aucun téléchargement terminé.")));
     return;
   }
 
@@ -1109,17 +1121,19 @@ function renderHistory(history) {
 
     const text = document.createElement("div");
     text.className = "itemText";
-    const errorLine = phase === "error"
-      ? `<div class="itemError" title="${escapeHtml(I18N.tr(job.error_hint || ""))}">${escapeHtml(I18N.tr(job.error || "Erreur du backend"))}</div>`
-      : "";
-
-    text.innerHTML = `<div class="itemTitle">${symbol} ${escapeHtml(safeTitle)}</div>
-      <div class="itemMeta">${escapeHtml(I18N.tr(modeLabel(job.mode)))} • ${escapeHtml(source.label)}${existing}${when ? " • " + when : ""}</div>
-      ${errorLine}`;
+    text.append(
+      uiElement("div", "itemTitle", `${symbol} ${safeTitle}`),
+      uiElement("div", "itemMeta", `${I18N.tr(modeLabel(job.mode))} • ${source.label}${existing}${when ? " • " + when : ""}`)
+    );
+    if (phase === "error") {
+      const error = uiElement("div", "itemError", I18N.tr(job.error || "Erreur du backend"));
+      error.title = I18N.tr(job.error_hint || "");
+      text.append(error);
+    }
 
     const sourceButtonWrap = document.createElement("div");
     sourceButtonWrap.className = "historySourceAction";
-    sourceButtonWrap.innerHTML = sourceButtonHtml(job.url, source, true);
+    sourceButtonWrap.append(sourceButtonElement(job.url, source, true));
     row.append(text, sourceButtonWrap);
 
     if (phase === "error") {
@@ -1149,13 +1163,6 @@ function renderHistory(history) {
   });
 }
 
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  })[c]);
-}
-
-
 function safeSourceUrl(raw) {
   try {
     const url = new URL(String(raw || ""));
@@ -1166,17 +1173,25 @@ function safeSourceUrl(raw) {
   }
 }
 
-function sourceButtonHtml(url, source = sourceInfo(url), compact = false) {
+function sourceButtonElement(url, source = sourceInfo(url), compact = false) {
   const safe = safeSourceUrl(url);
   const title = safe
     ? `Ouvrir la source · ${source.label}`
     : `Source · ${source.label}`;
   const compactClass = compact ? " sourceBadgeCompact" : "";
 
-  return `<button class="sourceBadge sourceLink${compactClass}" type="button" data-open-source="${escapeHtml(safe)}" data-source="${escapeHtml(source.key || "web")}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"${safe ? "" : " disabled"}>` +
-    `<span class="sourceGlyph" aria-hidden="true">${sourceIconSvg(source.key)}</span>` +
-    `<span class="sourceLabel">${escapeHtml(source.label)}</span>` +
-    `</button>`;
+  const button = uiElement("button", `sourceBadge sourceLink${compactClass}`);
+  button.type = "button";
+  button.dataset.openSource = safe;
+  button.dataset.source = source.key || "web";
+  button.title = title;
+  button.setAttribute("aria-label", title);
+  button.disabled = !safe;
+  const glyph = uiElement("span", "sourceGlyph");
+  glyph.setAttribute("aria-hidden", "true");
+  glyph.append(sourceIconElement(source.key));
+  button.append(glyph, uiElement("span", "sourceLabel", source.label));
+  return button;
 }
 
 
@@ -1196,13 +1211,13 @@ function updateSourceHost(host, url, source = sourceInfo(url), compact = false) 
   }
 
   host.dataset.sourceSignature = signature;
-  host.innerHTML = sourceButtonHtml(url, source, compact);
+  host.replaceChildren(sourceButtonElement(url, source, compact));
 }
 
 function clearSourceHost(host) {
   if (!host) return;
   delete host.dataset.sourceSignature;
-  host.innerHTML = "";
+  host.replaceChildren();
 }
 
 async function openSourceUrl(raw) {
@@ -1766,6 +1781,16 @@ function compatibilityText(compatibility) {
     : `${front} ↔ ${back} · ${I18N.tr("update requis")}`;
 }
 
+function dependencyItem(state, name, value, title, decorative = true) {
+  const row = uiElement("div", `dependencyItem ${state}`);
+  const dot = uiElement("span", "dependencyDot");
+  if (decorative) dot.setAttribute("aria-hidden", "true");
+  const detail = uiElement("span", "dependencyValue", value);
+  if (title !== undefined) detail.title = String(title ?? "");
+  row.append(dot, uiElement("span", "dependencyName", name), detail);
+  return row;
+}
+
 function renderDiagnosticsHealth(response) {
   const r = response || {};
   const deps = Array.isArray(r.dependencies?.items) ? r.dependencies.items : [];
@@ -1806,18 +1831,10 @@ function renderDiagnosticsHealth(response) {
   dependencyListEl.replaceChildren();
 
   if (!deps.length) {
-    const empty = document.createElement("div");
-    empty.className = "dependencyItem error";
-    empty.innerHTML =
-      `<span class="dependencyDot"></span>` +
-      `<span class="dependencyName">Diagnostic</span>` +
-      `<span class="dependencyValue">${escapeHtml(I18N.tr("indisponible"))}</span>`;
-    dependencyListEl.appendChild(empty);
+    dependencyListEl.append(dependencyItem("error", "Diagnostic", I18N.tr("indisponible"), undefined, false));
   } else {
     for (const dep of deps) {
-      const row = document.createElement("div");
       const state = dep.ok ? "ready" : (dep.required ? "error" : "warning");
-      row.className = `dependencyItem ${state}`;
 
       const update = updateItems.get(dep.id);
       const baseValue = dep.ok
@@ -1827,11 +1844,7 @@ function renderDiagnosticsHealth(response) {
         ? `${baseValue} → ${update.available || "?"}${update.potential_incompatibility ? " ⚠" : " ↑"}`
         : baseValue;
 
-      row.innerHTML =
-        `<span class="dependencyDot" aria-hidden="true"></span>` +
-        `<span class="dependencyName">${escapeHtml(dep.label || dep.id || "?")}</span>` +
-        `<span class="dependencyValue" title="${escapeHtml(dep.error || dep.version || "")}">${escapeHtml(value)}</span>`;
-      dependencyListEl.appendChild(row);
+      dependencyListEl.append(dependencyItem(state, dep.label || dep.id || "?", value, dep.error || dep.version || ""));
     }
   }
 
@@ -1857,17 +1870,23 @@ function renderDiagnosticsHealth(response) {
     : "non vérifiées";
   document.getElementById("dependencyUpdatesSummary").textContent = I18N.tr("Mises à jour :") + " " + I18N.tr(updateText);
 
-  diagnosticFactsEl.innerHTML =
-    `<div class="diagnosticFact">Compatibilité : <strong>${escapeHtml(compatibilityText(r.compatibility))}</strong></div>` +
-    `<div class="diagnosticFact">Destination : <strong>${escapeHtml(writeText)}</strong></div>` +
-    `<div class="diagnosticFact">Espace libre : <strong>${escapeHtml(formatBytes(destination.free_bytes))}</strong></div>` +
-    `<div class="diagnosticFact">Fichiers du backend : <strong>${escapeHtml(hostText)}</strong></div>` +
-    `<div class="diagnosticFact">Cache : <strong>${escapeHtml(formatBytes(cache.total_bytes || 0))}</strong></div>` +
-    `<div class="diagnosticFact">Logs : <strong>${escapeHtml(formatBytes(cache.logs_bytes || 0))}</strong></div>` +
-    `<div class="diagnosticFact">Récupérable : <strong>${escapeHtml(formatBytes(cache.reclaimable_bytes || 0))}</strong></div>` +
-    `<div class="diagnosticFact">Partiels orphelins : <strong>${escapeHtml(orphanPartialsText(cache))}</strong></div>` +
-    `<div class="diagnosticFact">État : <strong>${escapeHtml(stateText)}</strong></div>` +
-    `<div class="diagnosticFact">Migration : <strong>${escapeHtml(migrationText)}</strong></div>`;
+  const facts = [
+    ["Compatibilité :", compatibilityText(r.compatibility)],
+    ["Destination :", writeText],
+    ["Espace libre :", formatBytes(destination.free_bytes)],
+    ["Fichiers du backend :", hostText],
+    ["Cache :", formatBytes(cache.total_bytes || 0)],
+    ["Logs :", formatBytes(cache.logs_bytes || 0)],
+    ["Récupérable :", formatBytes(cache.reclaimable_bytes || 0)],
+    ["Partiels orphelins :", orphanPartialsText(cache)],
+    ["État :", stateText],
+    ["Migration :", migrationText]
+  ];
+  diagnosticFactsEl.replaceChildren(...facts.map(([label, value]) => {
+    const fact = uiElement("div", "diagnosticFact");
+    fact.append(document.createTextNode(label + " "), uiElement("strong", "", value));
+    return fact;
+  }));
 }
 
 async function restoreDiagnostics(deep = false) {
@@ -1884,12 +1903,7 @@ async function restoreDiagnostics(deep = false) {
     dependencyStateEl.classList.add("error");
     updateDependenciesHeaderState("error");
     dependencyStateTextEl.textContent = "Diagnostic indisponible";
-    dependencyListEl.innerHTML =
-      `<div class="dependencyItem error">` +
-      `<span class="dependencyDot"></span>` +
-      `<span class="dependencyName">Native Host</span>` +
-      `<span class="dependencyValue" title="${escapeHtml(err.message)}">erreur</span>` +
-      `</div>`;
+    dependencyListEl.replaceChildren(dependencyItem("error", "Native Host", "erreur", err.message, false));
     throw err;
   } finally {
     refreshDiagnosticsBtn.disabled = backendConnection.kind !== "ready";
@@ -2257,19 +2271,20 @@ chooseDestinationBtn.addEventListener("click", async () => {
 const PILL_STYLE_META = Object.freeze({
   minimal: {
     label: "Minimal",
-    preview: `<span class="pillPreviewMinimal">↓</span>`,
+    preview: () => uiElement("span", "pillPreviewMinimal", "↓"),
   },
   cat: {
     label: "Kitty",
-    preview: `<span class="pillPreviewCat">ᓚᘏᗢ</span>`,
+    preview: () => uiElement("span", "pillPreviewCat", "ᓚᘏᗢ"),
   },
   classic: {
     label: "Classique",
-    preview:
-      `<span class="pillPreviewClassic">` +
-      `<span class="pillPreviewClassicCat">ᓚᘏᗢ</span>` +
-      `<span class="pillPreviewClassicDownload">↓</span>` +
-      `</span>`,
+    preview: () => {
+      const preview = uiElement("span", "pillPreviewClassic");
+      preview.append(uiElement("span", "pillPreviewClassicCat", "ᓚᘏᗢ"),
+        uiElement("span", "pillPreviewClassicDownload", "↓"));
+      return preview;
+    },
   },
 });
 
@@ -2288,7 +2303,7 @@ function renderPillStyle(style) {
 
   pillStyleButtonEl.dataset.pillStyle = normalized;
   pillStyleCurrentLabelEl.textContent = meta.label;
-  pillStyleCurrentPreviewEl.innerHTML = meta.preview;
+  pillStyleCurrentPreviewEl.replaceChildren(meta.preview());
 
   pillStyleOptions.forEach(option => {
     const active = option.dataset.pillStyle === normalized;
