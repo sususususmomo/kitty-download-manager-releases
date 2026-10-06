@@ -36,6 +36,7 @@ jobs:
           name: shared-download-firefox
           path: artifacts/
       - name: Optional public extractor diagnostics (network dependent)
+        if: always()
         continue-on-error: true
         run: |
           failed=0

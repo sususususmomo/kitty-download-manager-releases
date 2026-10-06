@@ -116,6 +116,8 @@ window.qa=async function(action,args={}) {
  if(action==='detail')return popup()?.document.getElementById('hlsDetail')?.textContent || '';
  if(action==='source'){const v=popup(),s=v.document.getElementById('hlsSource');s.value=args.id || s.options[args.index || 1].value;s.dispatchEvent(new v.Event('change',{bubbles:true}));return true;}
  if(action==='mode')return popup()?.document.getElementById('mode')?.value;
+ if(action==='ready')return Boolean(popup()&&!popup().document.documentElement.classList.contains('popup-loading'));
+ if(action==='saved-mode')return (await browser.storage.local.get('selectedMode')).selectedMode;
  if(action==='catalogue'){const bg=await browser.runtime.getBackgroundPage();return (await bg.hlsForTab(args.tabId || window.testTab)).map(c=>({id:c.id,type:c.type,metadata:c.metadata,hls:c.hls && {kind:c.hls.kind,maxResolution:c.hls.maxResolution,variants:c.hls.variants.length,audioTracks:c.hls.audioTracks.length,subtitles:c.hls.subtitles.length},variants:c.variants?.length || 1}));}
  if(action==='diagnostics'){const bg=await browser.runtime.getBackgroundPage();return bg.qaHlsDiagnostics(Boolean(args.full));}
  if(action==='sourceurl')return popup()?.document.querySelector('#activeSource [data-open-source]')?.dataset.openSource || '';
@@ -266,7 +268,7 @@ window.qa=async function(action,args={}) {
    # Clear a completed job before the pill has necessarily consumed it.
    value('native',payload={'action':'clear_history'});wait(lambda:value('pill-state')=='idle')
    report['checks'].append('Removing an accepted job from history releases pill tracking')
-   value('open');wait(lambda:value('mode') is not None);value('mode-click',mode='mp3');value('close');time.sleep(.2)
+   value('open');wait(lambda:value('ready'));value('mode-click',mode='mp3');wait(lambda:value('saved-mode')=='mp3');value('close')
    before=len([r for r in value('diagnostics',full=True)['requests'] if r.get('payload')])
    value('pill');value('pill');audio=wait(finished);audio_streams=streams(audio)
    after=len([r for r in value('diagnostics',full=True)['requests'] if r.get('payload')])
@@ -339,7 +341,10 @@ window.qa=async function(action,args={}) {
         'popupCodec':first_streams[0]['codec_name'],'pillCodec':second_streams[0]['codec_name'],
         'audioLanguage':second['download_plan']['audioLanguage'],'subtitleLanguages':second['download_plan']['subtitleLanguages']})
      clear_equivalence_history()
-   for mode,height in (('720',720),('best',1080)):
+   # This DASH fixture advertises a single 1080p representation; 720p is
+   # correctly unavailable. The HLS fixture covers both quality choices.
+   quality_cases=(('best',1080),) if TRACKS=='dash' else (('720',720),('best',1080))
+   for mode,height in quality_cases:
     value('open');wait(lambda:len(value('tracks')['audio'])==3);value('mode-click',mode=mode)
     value('preferences');value('download');video_popup=wait(finished);video_streams=streams(video_popup)
     payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
