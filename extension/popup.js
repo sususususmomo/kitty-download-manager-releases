@@ -1275,9 +1275,8 @@ async function openSourceUrl(raw) {
 function backendErrorMessage(source, fallback = "Erreur du backend") {
   if (!source) return I18N.tr(fallback);
   if (typeof source === "string") return I18N.tr(source || fallback);
-  const message = I18N.tr(source.error || source.message || fallback);
-  const hint = I18N.tr(source.error_hint || source.hint || "");
-  return hint ? `${message} — ${hint}` : message;
+  return KittyShared.downloadErrorText({...source,error:I18N.tr(source.error || source.message || fallback),
+    error_hint:I18N.tr(source.error_hint || source.hint || '')},I18N.tr(fallback));
 }
 
 function render(state) {
@@ -2201,10 +2200,13 @@ copyDiagnosticsBtn.addEventListener("click", async () => {
   copyDiagnosticsBtn.disabled = true;
   setSettingsStatus("Préparation du diagnostic local…");
   try {
-    const r = await nativeMessage({ action: "diagnostics", deep: true });
-    if (!r?.ok) throw new Error(r?.error || "Diagnostic indisponible.");
-    renderDiagnosticsHealth(r);
-    const ok = await copyText(diagnosticsToText(r.diagnostics));
+    const [r,frontend] = await Promise.all([
+      nativeMessage({ action: "diagnostics", deep: true }).catch(error=>({ok:false,error:error.message})),
+      browser.runtime.sendMessage({type:'kitty-download-diagnostics'})
+    ]);
+    if(r?.ok)renderDiagnosticsHealth(r);
+    const nativeText=r?.ok?diagnosticsToText(r.diagnostics):`Native Host: ${backendErrorMessage(r)}`;
+    const ok = await copyText(nativeText+'\n\nShared popup/pill download trace:\n'+JSON.stringify(frontend?.events||[],null,2));
     if (!ok) throw new Error("Impossible de copier dans le presse-papiers.");
     setSettingsStatus("Diagnostic copié · sans URL, titre ni cookie.", "success");
   } catch (err) {

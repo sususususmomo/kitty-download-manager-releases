@@ -292,7 +292,29 @@
     return pos.total > 1 ? `${pos.current} / ${pos.total}` : "";
   }
 
+  // Both UIs retain the backend's actionable details and correlation ID.
+  function downloadErrorText(source, fallback = 'Impossible d’ajouter le téléchargement.') {
+    const parts = [source?.error || source?.message || fallback,
+      source?.error_hint, source?.error_detail].filter(v => typeof v === 'string' && v.trim());
+    if(source?.code || source?.error_code)parts.push(`[${source.code || source.error_code}]`);
+    if(source?.stage)parts.push(`Étape: ${source.stage}`);
+    if(source?.requestId)parts.push(`Diagnostic: ${source.requestId}`);
+    return [...new Set(parts)].join(' — ');
+  }
+  function downloadJobId(response) {
+    return response?.job_id || response?.first_job_id || response?.state?.active?.id || null;
+  }
+  function documentToken() {
+    // One token per isolated content-script document, shared by its scripts.
+    // Frame proof remains available on Firefox versions without documentId.
+    return globalThis.kittyDocumentToken ||= globalThis.crypto?.randomUUID?.() ||
+      `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  }
+
   globalThis.KittyShared = Object.freeze({
+    downloadErrorText,
+    downloadJobId,
+    documentToken,
     NATIVE_PROTOCOL_VERSION,
     LOADING_DOTS_CSS,
     loadingDotsElement,

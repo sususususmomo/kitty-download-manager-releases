@@ -47,7 +47,7 @@ function direct(store,url,mime,extra={}){const d=details(url,mime,extra);store.h
  version='8.34';vm.runInContext('compatibilityCache=null',ctx);const refused=await receiver({type:'kitty-download-media',tabId:1,candidateId:result.candidates[0].id},{url:popup});assert.equal(refused.code,'direct_video_backend_update_required');
  await receiver({type:'kitty-download-page',tabId:1,url:page},{url:popup});assert.equal(calls.at(-1).media_fallbacks,undefined);
  const before=calls.length;assert.equal((await receiver({type:'kitty-probe-media',tabId:1,candidateId:result.candidates[0].id},{url:page})).ok,false);assert.equal(calls.length,before);
- events.remove(1);await receiver({type:'kitty-media-context',hasBlob:true},{tab:{id:1,url:page}});result=await receiver({type:'kitty-media-list',tabId:1},{url:popup});assert.equal(result.blob_unavailable,true);assert.equal(result.candidates.length,0);
+ events.remove(1);await receiver({type:'kitty-media-context',hasBlob:true},{tab:{id:1,url:page},url:page,frameId:0});result=await receiver({type:'kitty-media-list',tabId:1},{url:popup});assert.equal(result.blob_unavailable,true);assert.equal(result.candidates.length,0);
  store.navigate(1,page+'/new');assert.equal(store.list(1).length,0);assert.equal(store.tabs.get(1).hasBlob,undefined);
  direct(store,'https://cdn.test/new.mp4','video/mp4');now+=16*60*1000;assert.equal(store.list(1).length,0);
  // Exercise the actual pill matching function, including explicit network sources.

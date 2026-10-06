@@ -69,6 +69,7 @@
         "https://*/*"
       ],
       "js": [
+        "shared.js",
         "media-dom.js",
         "media-context.js"
       ],

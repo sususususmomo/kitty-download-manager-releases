@@ -96,6 +96,23 @@ if (hlsStore && browser.webRequest) {
 function isKittyUi(sender) {
   return Boolean(browser.runtime.getURL && sender?.url === browser.runtime.getURL("popup.html"));
 }
+async function currentDocumentSender(message,sender) {
+  if(!Number.isInteger(sender?.tab?.id))return null;
+  const tab=await browser.tabs.get(sender.tab.id);
+  const frameId=sender.frameId||0;
+  const pageUrl=httpUrl(message.pageUrl);
+  if(!pageUrl || pageUrl===sender.url){
+    if(frameId===0&&sender.url!==tab.url)return null;
+    return {...sender,tab};
+  }
+  // Firefox's sender.url can stay at the initial document URL after
+  // pushState. Challenge this exact live document before accepting its URL.
+  if(!message.documentToken || (frameId===0&&pageUrl!==tab.url))return null;
+  const context=await browser.tabs.sendMessage(tab.id,{type:'kitty-document-context'},
+    sender.documentId?{documentId:sender.documentId}:{frameId});
+  if(context?.pageUrl!==pageUrl || context?.documentToken!==message.documentToken)return null;
+  return {...sender,tab,url:pageUrl};
+}
 async function hlsForTab(tabId) {
   if (!hlsStore || !Number.isInteger(tabId)) return [];
   try {
@@ -186,10 +203,13 @@ function publicItem(item) {
     maxHeight:c.metadata?.height || c.hls?.maxResolution || null}))};
 }
 async function downloadItem(message) {
+  downloadTrace(message,'compatibility');
   let comp=await hlsCompatibility();
+  if(comp?.code==='native_host_unavailable')return {ok:false,...comp};
   if(comp?.compatible&&!KittyShared.supportsMediaItems(comp)){compatibilityCache=null;comp=await ensureCompatibility();}
   if(!KittyShared.supportsMediaItems(comp))return {ok:false,error:'Les médias de la page nécessitent Kitty Backend v8.39 ou plus récent.'};
   if(message.track_selection&&Object.keys(message.track_selection).length&&!KittyShared.supportsMediaTracks(comp))return {ok:false,error:'Les pistes nécessitent Kitty Backend v8.42 ou plus récent.'};
+  downloadTrace(message,'media_selection',{itemId:message.itemId});
   let items=await itemsForTab(message.tabId),item=items.find(i=>i.id===message.itemId);
   // An unresolved DOM item can be selected before a player initializes. Take
   // a fresh, acknowledged frame snapshot before deciding it has no safe URL.
@@ -294,13 +314,64 @@ async function downloadFromContextMenu(info, tab) {
 
 async function savedDownloadMode() {
   const saved = await browser.storage.local.get(["selectedMode", "imageOnlyMode"]);
-  return saved?.imageOnlyMode ? "image" : saved?.selectedMode || "1080";
+  return saved?.imageOnlyMode ? "image" : ['720','1080','best','audio','mp3'].includes(saved?.selectedMode) ? saved.selectedMode : "1080";
 }
 
 
 // Both entry points resolve preferences and targets here. Storage is owned by
 // the background, so closing the popup cannot interrupt a pending change.
 let downloadOperation = Promise.resolve();
+const pendingDownloads=new Map();
+let settingsRevision=0,downloadTraceCounter=0;
+const downloadEvents=[];
+const downloadJobTraces=new Map();
+browser.storage.onChanged?.addListener((changes,area)=>{
+  if(area==='local' && ['selectedMode','imageOnlyMode','playlistMode'].some(key=>key in changes))settingsRevision++;
+});
+function diagnosticText(value) {
+  return String(value ?? '').replace(/https?:\/\/[^\s<>"']+/gi,raw=>{
+    try {const u=new URL(raw);return `${u.origin}/[path-redacted]`;}catch{return '[url-redacted]';}
+  }).replace(/(?:Bearer\s+\S+|(?:token|cookie|authorization|signature|password)\s*[:=]\s*[^\s,;]+)/gi,'[secret-redacted]').slice(0,2000);
+}
+function diagnosticUrl(value) {
+  try {const u=new URL(value);return {origin:u.origin,path:'[redacted]',queryKeys:[...new Set(u.searchParams.keys())]};}catch{return null;}
+}
+function downloadTrace(message,stage,data={}) {
+  if(!message?._trace)return;
+  message._trace.stage=stage;
+  const event={time:new Date().toISOString(),requestId:message._trace.id,entry:message._trace.entry,tabId:message._trace.tabId,stage,...data};
+  for(const key of ['error','error_hint','error_detail'])if(event[key])event[key]=diagnosticText(event[key]);
+  downloadEvents.push(event);if(downloadEvents.length>200)downloadEvents.shift();
+  console.debug('Kitty download',event);
+}
+function sharedStartDownload(message,sender) {
+  const tabId=isKittyUi(sender)?message.tabId:sender?.tab?.id;
+  if(!Number.isInteger(tabId)||(!isKittyUi(sender)&&sender?.frameId!==0))
+    return Promise.resolve({ok:false,code:'unauthorized_download',error:'Requête Kitty non autorisée.',stage:'received'});
+  const key=JSON.stringify([tabId,sender?.documentId||message.documentToken||sender?.url||'',message.pageUrl||'',message.forceToken||null,settingsRevision]);
+  if(pendingDownloads.has(key))return pendingDownloads.get(key);
+  const request={...message,_trace:{id:`download-${Date.now().toString(36)}-${++downloadTraceCounter}`,entry:isKittyUi(sender)?'popup':'pill',tabId,stage:'received'}};
+  downloadTrace(request,'received',{url:diagnosticUrl(sender?.tab?.url||sender?.url),messageType:message.type});
+  const result=serialDownloadOperation(async()=>{
+    try {
+      const response=await addDownload(request,sender);
+      const stage=response?.stage || (response?.ok?'accepted':request._trace.stage);
+      downloadTrace(request,stage,{ok:Boolean(response?.ok),jobId:KittyShared.downloadJobId(response),code:response?.code,
+        error:response?.error,error_hint:response?.error_hint,error_detail:response?.error_detail});
+      const jobId=KittyShared.downloadJobId(response);
+      if(jobId){downloadJobTraces.set(jobId,{message:request,signature:''});if(downloadJobTraces.size>100)downloadJobTraces.delete(downloadJobTraces.keys().next().value);}
+      return {...response,stage,requestId:request._trace.id};
+    }catch(error){
+      const stage=request._trace.stage;
+      downloadTrace(request,stage,{ok:false,error:error?.message||String(error),exception:error?.name||'Error'});
+      return {ok:false,code:stage==='native_request'?'native_host_unavailable':'download_start_failed',
+        error:diagnosticText(error?.message||String(error)),stage,requestId:request._trace.id};
+    }
+  });
+  pendingDownloads.set(key,result);
+  result.finally(()=>{if(pendingDownloads.get(key)===result)pendingDownloads.delete(key);});
+  return result;
+}
 function serialDownloadOperation(operation) {
   const result = downloadOperation.then(operation);
   downloadOperation = result.catch(() => {});
@@ -354,8 +425,10 @@ function sharedRequestKey(payload) {
 }
 
 async function dispatchSharedDownload(payload, message) {
+  downloadTrace(message,'compatibility');
   if(payload.track_policy==='prefer_available') {
     let comp=await ensureCompatibility();
+    if(comp?.code==='native_host_unavailable')return {ok:false,...comp};
     if(!KittyShared.supportsAdaptiveTracks(comp)){compatibilityCache=null;comp=await ensureCompatibility();}
     if(!KittyShared.supportsAdaptiveTracks(comp)) {
       if(Object.keys(payload.track_selection||{}).length || payload.preferred_source_id)
@@ -364,35 +437,58 @@ async function dispatchSharedDownload(payload, message) {
     }
   }
   const requestKey=sharedRequestKey(payload);
+  if(message._trace?.pageUrl && (await browser.tabs.get(message._trace.tabId)).url!==message._trace.pageUrl)
+    return {ok:false,code:'stale_document',error:'La page a changé pendant la préparation du téléchargement.'};
+  downloadTrace(message,'native_request',{action:payload.action,fields:Object.keys(payload).sort(),mode:payload.mode,
+    url:diagnosticUrl(payload.url),sourceCount:payload.media_fallbacks?.length||0,preferredSourceId:payload.preferred_source_id||null,
+    tracks:cleanTrackPreferences(payload.track_selection),destination:'backend:get_settings/output_dir',automatic:Boolean(payload.automatic)});
   const result=await nativeMessage({...payload,force:message.forceToken===requestKey});
+  downloadTrace(message,'native_response',{ok:Boolean(result?.ok),jobId:KittyShared.downloadJobId(result),code:result?.code,
+    error:result?.error,error_hint:result?.error_hint,error_detail:result?.error_detail});
   invalidateStatus();
   return {...result,requestKey,selectedMode:payload.mode};
 }
 async function addDownload(message,sender) {
+  downloadTrace(message,'tab');
   const tabId=isKittyUi(sender)?message.tabId:sender?.tab?.id;
   if(!Number.isInteger(tabId) || (!isKittyUi(sender) && sender.frameId!==0))
     return {ok:false,error:'Requête Kitty non autorisée.'};
   const tab=await browser.tabs.get(tabId);
-  if(!isKittyUi(sender) && sender.url && sender.url!==tab.url)return {ok:false,code:'media_not_detected',error:'Le média n’est plus disponible sur le site source.'};
+  message._trace.pageUrl=tab.url;
+  downloadTrace(message,'tab',{url:diagnosticUrl(tab.url),frameId:sender?.frameId??null});
+  if(!isKittyUi(sender)){
+    let current;
+    try{current=await currentDocumentSender(message,sender);}catch(error){downloadTrace(message,'tab',{error:error?.message||String(error)});}
+    if(!current)return {ok:false,code:'stale_document',error:'Le document ciblé a changé. Recharge la page puis réessaie.'};
+    downloadTrace(message,'tab',{sameDocumentNavigation:current.url!==sender.url,documentId:sender.documentId||null,url:diagnosticUrl(current.url)});
+  }
   const settings=await downloadSettings(tabId);
   let mode=await savedDownloadMode();
-  const saved=await browser.storage.local.get('playlistMode');
+  const saved=await browser.storage.local.get(['playlistMode','selectedMode','imageOnlyMode']);
+  downloadTrace(message,'settings',{mode,itemId:settings.itemId,candidateId:settings.candidateId,tracks:settings.trackPreferences,
+    defaults:[...(!['720','1080','best','audio','mp3'].includes(saved?.selectedMode)&&!saved?.imageOnlyMode?['mode:1080']:[]),
+      ...(!settings.candidateId?['source:automatic']:[]),...(!Object.keys(settings.trackPreferences).length?['tracks:automatic']:[])],destination:'backend:get_settings/output_dir'});
   if(mode!=='image' && saved?.playlistMode && settings.collectionUrl)
     return dispatchSharedDownload({action:'download_playlist',url:settings.collectionUrl,mode},message);
   if(mode!=='image') {
-    try {await browser.tabs.sendMessage?.(tabId,{type:'kitty-media-rescan'});}catch{}
+    downloadTrace(message,'rescan');
+    try {
+      const response=await browser.tabs.sendMessage?.(tabId,{type:'kitty-media-rescan'});
+      if(response?.ok===false)downloadTrace(message,'rescan',{error:response.error||'Snapshot not acknowledged'});
+    }catch(error){downloadTrace(message,'rescan',{error:error?.message||String(error)});}
     const items=await itemsForTab(tabId);
     const item=items.find(i=>i.id===settings.itemId) || items.find(i=>i.downloadable) || items[0];
     const track_selection=item && Object.hasOwn(settings.trackSelections,item.id)
       ? settings.trackSelections[item.id] : settings.trackPreferences;
     if(item) {
       if(item.mediaKind==='audio'&&['720','1080','best'].includes(mode))mode='audio';
-      return downloadItem({tabId,itemId:item.id,mode,track_selection,
+      return downloadItem({tabId,itemId:item.id,mode,track_selection,_trace:message._trace,
         preferred_source_id:settings.candidateId,shared:true,forceToken:message.forceToken});
     }
   }
   let resolved;
-  try {resolved=await browser.tabs.sendMessage?.(tabId,{type:'kitty-resolve-media-url'});}catch{}
+  downloadTrace(message,'resolve_url');
+  try {resolved=await browser.tabs.sendMessage?.(tabId,{type:'kitty-resolve-media-url'});}catch(error){downloadTrace(message,'resolve_url',{error:error?.message||String(error)});}
   if(resolved?.error)return {ok:false,code:'media_not_detected',error:resolved.error};
   const url=httpUrl(resolved?.url)||httpUrl(tab.url);
   if(!url)return {ok:false,code:'media_not_detected',error:'URL HTTP/HTTPS requise.'};
@@ -458,7 +554,8 @@ async function ensureCompatibility() {
       if (result?.ok && comp?.compatible) compatibilityCache = comp;
       return comp || { compatible: false, message: "Backend Kitty ancien ou incompatible." };
     })
-    .catch(() => ({ compatible: false, message: "Backend Kitty ancien ou incompatible." }))
+    .catch(error => ({ compatible: false, code:'native_host_unavailable',
+      error:diagnosticText(error?.message||String(error)), message:diagnosticText(error?.message||String(error)) }))
     .finally(() => { compatibilityPromise = null; });
   return compatibilityPromise;
 }
@@ -468,6 +565,7 @@ async function nativeMessage(payload) {
   if (!SAFE_NATIVE_ACTIONS.has(action)) {
     const comp = await ensureCompatibility();
     if (!comp?.compatible) {
+      if(comp?.code==='native_host_unavailable')return {ok:false,...comp};
       return {
         ok: false,
         code: "incompatible_frontend_backend",
@@ -491,6 +589,15 @@ async function getStatusCached(force = false) {
 
   statusPromise = nativeMessage({ action: "status" })
     .then(result => {
+      for(const job of [result?.state?.active,...(result?.state?.queue||[]),...(result?.state?.history||[])].filter(Boolean)){
+        const trace=downloadJobTraces.get(job.id);
+        if(!trace)continue;
+        const signature=JSON.stringify([job.status,job.metadata_status,Math.floor(KittyShared.jobPercent(job)||0),job.error,job.error_detail]);
+        if(signature===trace.signature)continue;
+        trace.signature=signature;
+        downloadTrace(trace.message,'job_status',{jobId:job.id,status:job.status,metadataStatus:job.metadata_status,
+          progress:KittyShared.jobPercent(job),code:job.error_code,error:job.error,error_hint:job.error_hint,error_detail:job.error_detail});
+      }
       cachedStatus = result;
       cachedAt = Date.now();
       return result;
@@ -511,8 +618,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (!message || typeof message !== "object") return;
 
   if(message.type==='kitty-media-dom') {
-    if(mediaItems?.update(sender,message.items))notifyHls(sender.tab.id);
-    return;
+    // Preserve the synchronous path for unchanged, already scoped snapshots.
+    const update=current=>{
+      const accepted=Boolean(current&&mediaItems?.update(current,message.items));
+      if(accepted)notifyHls(current.tab.id);
+      return {ok:accepted,...(!accepted?{error:'Snapshot média refusé : document ou onglet périmé.'}:{})};
+    };
+    if(!message.pageUrl||message.pageUrl===sender.url)return Promise.resolve(update(sender));
+    return currentDocumentSender(message,sender).then(update,error=>({ok:false,error:diagnosticText(error.message)}));
   }
   if(['kitty-media-items','kitty-probe-item','kitty-download-item','kitty-download-items'].includes(message.type)) {
     if(!isKittyUi(sender))return Promise.resolve({ok:false,error:'Requête Kitty non autorisée.'});
@@ -539,9 +652,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
 
   if (message.type === 'kitty-media-context' && Number.isInteger(sender?.tab?.id) && typeof message.hasBlob==='boolean') {
-    hlsStore?.context(sender.tab.id,sender.tab.url,message.hasBlob);
-    notifyHls(sender.tab.id);
-    return;
+    return currentDocumentSender(message,sender).then(current=>{
+      if(!current)return {ok:false,error:'Document média périmé.'};
+      hlsStore?.context(current.tab.id,current.tab.url,message.hasBlob);
+      notifyHls(current.tab.id);return {ok:true};
+    },error=>({ok:false,error:diagnosticText(error.message)}));
   }
 
   if (["kitty-media-list", "kitty-download-media", "kitty-probe-media", "kitty-hls-list", "kitty-download-hls", "kitty-probe-hls", "kitty-download-page"].includes(message.type)) {
@@ -564,10 +679,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
 
   if(message.type==='kitty-download-settings') {
     if(!isKittyUi(sender))return Promise.resolve({ok:false,error:'Requête Kitty non autorisée.'});
+    if(message.change)settingsRevision++;
     return serialDownloadOperation(()=>downloadSettings(message.tabId,message.change));
   }
   if(message.type==='kitty-add-download' || message.type==='kitty-pill-download') {
-    return serialDownloadOperation(()=>addDownload(message,sender));
+    return sharedStartDownload(message,sender);
+  }
+  if(message.type==='kitty-download-diagnostics') {
+    return Promise.resolve(isKittyUi(sender)?{ok:true,events:downloadEvents.slice()}:{ok:false,error:'Requête Kitty non autorisée.'});
   }
 
 

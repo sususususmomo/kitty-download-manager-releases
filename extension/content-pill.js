@@ -36,6 +36,9 @@
   let currentStateText = "Download";
   let suppressNextDownloadClick = false;
   let downloadPending = false;
+  let trackedJobSeen = false;
+  let missingJobPolls = 0;
+  let acceptedAt = 0;
 
   function isMediaSite() {
     const hostname = location.hostname.replace(/^www\./, "").toLowerCase();
@@ -230,7 +233,7 @@
       adoptMatchingJob(state);
 
       if (!trackedJobId) {
-        if (!duplicatePending) setVisualState("idle", "Download");
+        if (!duplicatePending && currentStateKind !== 'error') setVisualState("idle", "Download");
         scheduleNextPoll(15000);
         return;
       }
@@ -238,10 +241,22 @@
       const located = findJob(state, trackedJobId);
 
       if (!located) {
+        // Never confuse a stale status snapshot with an enqueue failure. Once
+        // observed, two missing snapshots mean the job was removed/cleared.
+        if ((trackedJobSeen && ++missingJobPolls >= 2) || (!trackedJobSeen && acceptedAt && Date.now()-acceptedAt > 30000)) {
+          const missingId=trackedJobId;
+          trackedJobId=null;
+          if(trackedJobSeen)setVisualState('idle','Download');
+          else setVisualState('error',`Job accepté mais absent du suivi : ${missingId}`);
+          scheduleNextPoll(15000);
+          return;
+        }
         nextDelay = 1100;
         scheduleNextPoll(nextDelay);
         return;
       }
+      trackedJobSeen = true;
+      missingJobPolls = 0;
 
       if (located.place === "queue") {
         const qpos = queuePosition(state, trackedJobId);
@@ -290,11 +305,9 @@
         resetToIdleSoon(1600);
         nextDelay = 15000;
       } else if (phase === "error") {
-        setVisualState("error", located.job.error || "Erreur");
-        downloadButton.title = I18N.tr(located.job.error_hint || located.job.error || "Erreur");
+        setVisualState("error", KittyShared.downloadErrorText(located.job, 'Erreur du téléchargement'));
         trackedJobId = null;
         duplicatePending = false;
-        resetToIdleSoon(2200);
         nextDelay = 15000;
       } else if (phase === "cancelled") {
         trackedJobId = null;
@@ -315,12 +328,18 @@
     const downloadUrl=location.href;
     const force=Boolean(duplicatePending);
     downloadPending = true;
+    clearResetTimer();
+    trackedJobSeen = false;
+    missingJobPolls = 0;
+    acceptedAt = 0;
     clearPollTimer();
     setVisualState("metadata", force ? "Relance…" : "Ajout…");
 
     try {
       const response = await browser.runtime.sendMessage({
         type: "kitty-add-download",
+        pageUrl:location.href,
+        documentToken:KittyShared.documentToken(),
         forceToken:duplicatePending?.requestKey
       });
 
@@ -334,16 +353,19 @@
 
         if (response?.code === "already_active" || response?.code === "already_queued") {
           duplicatePending = false;
-          trackedJobId = response.job_id || response.first_job_id || null;
+          trackedJobId = KittyShared.downloadJobId(response);
+          acceptedAt = Date.now();
           scheduleNextPoll(100);
           return;
         }
 
-        throw new Error(response?.error || "Impossible d'ajouter le téléchargement.");
+        throw new Error(KittyShared.downloadErrorText(response));
       }
 
       duplicatePending = false;
-      trackedJobId = response.job_id || response.first_job_id || null;
+      trackedJobId = KittyShared.downloadJobId(response);
+      acceptedAt = Date.now();
+      if(!trackedJobId)throw new Error('Réponse du backend acceptée sans identifiant de job. Consulte le diagnostic Kitty.');
       setVisualState("metadata", "Métadonnées…");
       scheduleNextPoll(100);
     } catch (error) {
@@ -351,7 +373,6 @@
       trackedJobId = null;
       setVisualState("error", error?.message || "Erreur");
       downloadButton.title = I18N.tr(error?.message || "Erreur");
-      resetToIdleSoon(2200);
     } finally {
       downloadPending = false;
       if(!pollTimer)scheduleNextPoll(trackedJobId ? 100 : 15000);
@@ -794,6 +815,7 @@
   }
 
   browser.runtime.onMessage.addListener((message) => {
+    if(message?.type==='kitty-document-context')return Promise.resolve({ok:true,pageUrl:location.href,documentToken:KittyShared.documentToken()});
     if (!message || typeof message !== "object") return;
 
     if (message.type === "kitty-resolve-media-url") {

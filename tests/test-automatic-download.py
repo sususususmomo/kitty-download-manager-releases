@@ -136,7 +136,10 @@ class AutomaticTests(fixture.DashTests):
   type(self).slow=True
   def cancel():
    self.segment_seen.wait(10);worker.CONTROL_DIR.mkdir(exist_ok=True)
-   queue_store.atomic_json(worker.CONTROL_DIR/'fixture.json',{'action':'cancel'});os.kill(os.getpid(),signal.SIGTERM)
+   queue_store.atomic_json(worker.CONTROL_DIR/'fixture.json',{'action':'cancel'})
+   # Windows uses the production IPC watcher; os.kill(SIGTERM) would kill the
+   # test interpreter without invoking Python's signal handler.
+   if os.name!='nt':os.kill(os.getpid(),signal.SIGTERM)
   thread=threading.Thread(target=cancel,daemon=True);thread.start()
   code,entry=self.automatic([self.candidate_source()]);thread.join(2)
   self.assertEqual(code,0);self.assertEqual(entry['status'],'cancelled');self.assertEqual(len(self.transfers),1)

@@ -20,7 +20,9 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT=Path(__file__).resolve().parents[1]
-EQUIVALENCE=os.environ.get('KITTY_TEST_DOWNLOAD_EQUIVALENCE')=='1'
+EXTENSION_ROOT=Path(os.environ.get('KITTY_TEST_EXTENSION',ROOT/'extension'))
+REPRODUCTION=os.environ.get('KITTY_TEST_PILL_REPRODUCTION')=='1'
+EQUIVALENCE=REPRODUCTION or os.environ.get('KITTY_TEST_DOWNLOAD_EQUIVALENCE')=='1'
 ITEMS=os.environ.get('KITTY_TEST_MEDIA_ITEMS')=='1'
 TRACKS=os.environ.get('KITTY_TEST_MEDIA_TRACKS')
 CONTEXT=os.environ.get('KITTY_TEST_REQUEST_CONTEXT')=='1'
@@ -113,8 +115,12 @@ window.qa=async function(action,args={}) {
  if(action==='diagnostics'){const bg=await browser.runtime.getBackgroundPage();return bg.qaHlsDiagnostics(Boolean(args.full));}
  if(action==='sourceurl')return popup()?.document.querySelector('#activeSource [data-open-source]')?.dataset.openSource || '';
  if(action==='preferences'){const bg=await browser.runtime.getBackgroundPage();return bg.serialDownloadOperation(()=>bg.downloadSettings(window.testTab));}
+ if(action==='spa')return browser.tabs.sendMessage(window.testTab,{type:'qa-spa',url:args.url});
+ if(action==='senders'){const bg=await browser.runtime.getBackgroundPage();return bg.qaSenders;}
+ if(action==='empty-catalogue'){const bg=await browser.runtime.getBackgroundPage();return bg.qaEmptyCatalogue(window.testTab);}
  if(action==='pill'){return browser.tabs.sendMessage(window.testTab,{type:'qa-pill-click'});}
  if(action==='pill-state'){return browser.tabs.sendMessage(window.testTab,{type:'qa-pill-state'});}
+ if(action==='pill-detail'){return browser.tabs.sendMessage(window.testTab,{type:'qa-pill-detail'});}
  if(action==='style'){await browser.storage.local.set({pillEnabled:true,pillScope:'all',pillStyle:args.style,uiLanguage:args.language});return true;}
  if(action==='mode-click'){const v=popup();v.document.querySelector('.modeMenuItem[data-mode="'+args.mode+'"]').click();return true;}
  if(action==='download'){popup().document.getElementById('download').click();return true;}
@@ -129,11 +135,14 @@ window.qa=async function(action,args={}) {
  if(action==='blob'){await browser.tabs.sendMessage(window.testTab,{type:'qa-blob',url:args.url});return true;}
  if(action==='remove'){await browser.tabs.remove(window.testTab);return true;}
  if(action==='prepare'){await browser.storage.local.set({selectedMode:args.mode || '720',uiLanguage:'fr'});return true;}
+ if(action==='reset-download-settings'){await browser.storage.local.remove(['selectedMode','imageOnlyMode','playlistMode','kittyTrackPreferences','kittyDownloadTargets']);return true;}
 };
 '''
   # A test-only content listener loads manifests as a browser player would.
   content_js='''browser.runtime.onMessage.addListener(async m=>{
+   if(m.type==="qa-spa"){history.pushState({},'',m.url);return location.href;}
    if(m.type==="qa-pill-click"){const b=globalThis.qaPillShadow?.getElementById('download');if(!b)throw Error('Pill not mounted');b.click();return true;}
+   if(m.type==="qa-pill-detail")return {state:globalThis.qaPillShadow?.getElementById('pill')?.dataset.state,title:globalThis.qaPillShadow?.getElementById('download')?.title};
    if(m.type==="qa-pill-state")return globalThis.qaPillShadow?.getElementById('pill')?.dataset.state || null;
    if(m.type==="qa-scan")return KittyMediaDOM.scan();
   if(m.type==="qa-dom"){if(m.mutate)document.body.insertAdjacentHTML('beforeend',m.html);else document.body.innerHTML=m.html;return true;}
@@ -144,16 +153,16 @@ window.qa=async function(action,args={}) {
   });'''
   xpi=scratch/'test.xpi'
   with zipfile.ZipFile(xpi,'w',zipfile.ZIP_DEFLATED) as z:
-   for p in (ROOT/'extension').rglob('*'):
+   for p in EXTENSION_ROOT.rglob('*'):
     if p.is_file() and p.name!='manifest.json':
      if EQUIVALENCE and p.name=='content-pill.js':
       # Only expose its closed shadow tree to the QA listener. Event handlers,
       # dispatch and production settings code remain byte-for-byte unchanged.
       z.writestr('content-pill.js',p.read_text().replace('shadow = host.attachShadow({ mode: "closed" });','shadow = host.attachShadow({ mode: "closed" }); globalThis.qaPillShadow = shadow;'))
-     else:z.write(p,p.relative_to(ROOT/'extension'))
-   manifest=json.loads((ROOT/'extension/manifest.json').read_text());manifest['content_scripts'].append({'matches':['http://127.0.0.1/*'],'js':['qa-content.js'],'run_at':'document_idle'})
+     else:z.write(p,p.relative_to(EXTENSION_ROOT))
+   manifest=json.loads((EXTENSION_ROOT/'manifest.json').read_text());manifest['content_scripts'].append({'matches':['http://127.0.0.1/*'],'js':['qa-content.js'],'run_at':'document_idle'})
    manifest['background']['scripts'].append('qa-background.js')
-   z.writestr('qa-background.js','''const qaRequests=[];const qaNative=nativeMessage;nativeMessage=async function(p){const row={action:p.action,url:p.url?new URL(p.url).pathname:null,item:p.media_item?.id};qaRequests.push(row);row.payload=p.action==='download'?JSON.parse(JSON.stringify(p)):null;try{const r=await qaNative(p);row.ok=r?.ok;row.code=r?.code;row.error=r?.error;return r;}catch(e){row.error=String(e);throw e;}};function qaHlsDiagnostics(full=false){return {parser:Boolean(globalThis.KittyHlsParser),reader:hlsReader?.stats,active:hlsReader?.active.size,requests:full?qaRequests:qaRequests.map(({payload,...r})=>r)};}function qaStoredDom(tabId){return Array.from(mediaItems.tabs.get(tabId)?.frames.values()||[]).flatMap(f=>f.items.map(i=>i.domId));}const qaAssociations=[];const qaMediaLog=mediaItems?.log;if(mediaItems)mediaItems.log=(event,data)=>{qaAssociations.push(data);if(qaAssociations.length>1000)qaAssociations.shift();qaMediaLog(event,data);};function qaAssociationLogs(){return qaAssociations;}''')
+   z.writestr('qa-background.js','''function qaEmptyCatalogue(tabId){hlsStore.clear(tabId);mediaItems.clear(tabId);return true;}globalThis.qaSenders=[];browser.runtime.onMessage.addListener((m,s)=>{if(m?.type==='kitty-add-download'||m?.type==='kitty-media-dom')qaSenders.push({type:m.type,url:s.url,tabUrl:s.tab?.url,documentId:s.documentId,frameId:s.frameId});});const qaRequests=[];const qaNative=nativeMessage;nativeMessage=async function(p){const row={action:p.action,url:p.url?new URL(p.url).pathname:null,item:p.media_item?.id};qaRequests.push(row);row.payload=p.action==='download'?JSON.parse(JSON.stringify(p)):null;try{const r=await qaNative(p);row.ok=r?.ok;row.code=r?.code;row.error=r?.error;return r;}catch(e){row.error=String(e);throw e;}};function qaHlsDiagnostics(full=false){return {parser:Boolean(globalThis.KittyHlsParser),reader:hlsReader?.stats,active:hlsReader?.active.size,requests:full?qaRequests:qaRequests.map(({payload,...r})=>r)};}function qaStoredDom(tabId){return Array.from(mediaItems.tabs.get(tabId)?.frames.values()||[]).flatMap(f=>f.items.map(i=>i.domId));}const qaAssociations=[];const qaMediaLog=mediaItems?.log;if(mediaItems)mediaItems.log=(event,data)=>{qaAssociations.push(data);if(qaAssociations.length>1000)qaAssociations.shift();qaMediaLog(event,data);};function qaAssociationLogs(){return qaAssociations;}''')
    z.writestr('manifest.json',json.dumps(manifest));z.writestr('qa-content.js',content_js)
    z.writestr('hls-harness.html','<!doctype html><html><script src="hls-harness.js"></script><body>Isolated HLS QA</body></html>');z.writestr('hls-harness.js',harness_js)
   options=Options();options.binary_location=os.environ['KITTY_FIREFOX_BINARY'];options.add_argument('-headless')
@@ -225,7 +234,64 @@ window.qa=async function(action,args={}) {
 
 
   value('prepare',mode='1080' if GROUPS else '720');original_tab=value('tab',url=test.base+'/unsupported');time.sleep(.5)
-  if EQUIVALENCE:
+  if REPRODUCTION:
+   # No popup has ever been opened in this browser session.
+   value('reset-download-settings')
+   value('navigate',url=test.base+'/normal');time.sleep(.8)
+   value('pill');cold=wait(finished);cold_streams=streams(cold)
+   assert cold['mode']=='1080',cold
+   report['checks'].append('Cold pill with never-opened popup creates and completes a real native job')
+   wait(lambda:value('pill-state')=='idle');value('native',payload={'action':'clear_history'})
+   value('spa',url=test.base+'/normal?spa-second');time.sleep(.4)
+   report['sendersBeforeSPA']=value('senders')
+   report['pillBeforeSPA']=value('pill-state')
+   value('pill');time.sleep(.5);report['spaClick']=value('pill-detail');report['sendersAfterSPA']=value('senders');spa=wait(finished);streams(spa)
+   report['checks'].append('Real same-document navigation produces a completed download from pill')
+   report['senders']=value('senders')
+   report['coldRequest']=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][0]
+   report['spaRequest']=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
+   assert report['spaRequest']['media_item']['page_url']==test.base+'/normal?spa-second'
+   # Clear a completed job before the pill has necessarily consumed it.
+   value('native',payload={'action':'clear_history'});wait(lambda:value('pill-state')=='idle')
+   report['checks'].append('Removing an accepted job from history releases pill tracking')
+   value('open');wait(lambda:value('mode') is not None);value('mode-click',mode='mp3');value('close');time.sleep(.2)
+   before=len([r for r in value('diagnostics',full=True)['requests'] if r.get('payload')])
+   value('pill');value('pill');audio=wait(finished);audio_streams=streams(audio)
+   after=len([r for r in value('diagnostics',full=True)['requests'] if r.get('payload')])
+   assert after==before+1,(before,after)
+   assert audio['mode']=='mp3' and {s['codec_type'] for s in audio_streams}=={'audio'},audio
+   report['checks'].append('Popup MP3 setting survives closure; two rapid pill clicks enqueue one actual transfer')
+   wait(lambda:value('pill-state')=='idle');value('native',payload={'action':'clear_history'})
+   # Real missing Native Host, with restoration for the recovery click.
+   launcher=native/'host.py';disabled=native/'host.py.disabled';launcher.rename(disabled)
+   try:
+    value('pill');wait(lambda:value('pill-state')=='error');time.sleep(3)
+    detail=value('pill-detail');assert detail['state']=='error' and 'Diagnostic:' in detail['title'],detail
+    report['nativeHostFailure']=detail
+   finally:disabled.rename(launcher)
+   value('pill');recovery=wait(finished);streams(recovery)
+   report['checks'].append('Real Native Host unavailable error persists, exposes its diagnostic ID and recovers on explicit retry')
+   wait(lambda:value('pill-state')=='idle');value('native',payload={'action':'clear_history'})
+   second=value('tab',url=test.base+'/normal');time.sleep(.5)
+   value('pill');tab_job=wait(finished);streams(tab_job)
+   assert tab_job['media_item']['page_url']==test.base+'/normal'
+   value('switch',tabId=original_tab);assert value('pill-state')=='idle'
+   report['checks'].append('Two tabs keep native job target and pill state isolated')
+   value('switch',tabId=second);wait(lambda:value('pill-state')=='idle');value('native',payload={'action':'clear_history'})
+   value('navigate',url=test.base+'/normal?extractor-only');time.sleep(.5)
+   value('dom',html='<p>Page with no initialized player</p>');value('empty-catalogue')
+   value('pill');extracted=wait(finished);streams(extracted)
+   assert extracted['url']==test.base+'/normal?extractor-only' and extracted['selected_source_type']=='ytdlp',extracted
+   report['checks'].append('Pill without DOM metadata downloads a supported page through the real yt-dlp extractor')
+   wait(lambda:value('pill-state')=='idle');value('native',payload={'action':'clear_history'})
+   value('navigate',url=test.base+'/unsupported?metadata-error');time.sleep(.5)
+   value('dom',html='<video src="/expired.m3u8"></video>');value('pill');failed=wait(finished)
+   assert failed['status']=='error',failed
+   wait(lambda:value('pill-state')=='error');time.sleep(3);detail=value('pill-detail')
+   assert detail['state']=='error' and failed.get('error') in detail['title'],detail
+   report['metadataFailure']={k:failed.get(k) for k in ('status','error_code','error','error_detail')}
+   report['checks'].append('Actual failed metadata/source produces a persistent pill error from the tracked backend job')
+  elif EQUIVALENCE:
    def clear_equivalence_history():
     # Let the visible pill consume completion before removing that job from
     # history. Clearing it first can strand its test-only tracked job ID.
@@ -588,6 +654,10 @@ finally:
   if not report.get('ok'):
    try:report['state']=value('status');report['phase']=value('phase');report['images']=value('images');report['diagnostics']=value('diagnostics');report['catalogue']=value('catalogue');print(json.dumps(report,ensure_ascii=False))
    except Exception as e:print('Diagnostics unavailable:',str(e))
+   if REPRODUCTION:
+    for name,action in [('senders','senders'),('pillState','pill-state'),('nativeRequests','diagnostics')]:
+     try:report[name]=value(action)
+     except Exception as e:report[name]=str(e)
   driver.quit()
  if original is None:registry.unlink(missing_ok=True)
  else:registry.write_bytes(original)
