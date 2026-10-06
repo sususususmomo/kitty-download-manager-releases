@@ -64,7 +64,8 @@ test('enqueue invalidates an older status promise without overwriting the new ca
  f.setNativeHandler(async p=>p.action==='compatibility'?{ok:true,compatibility:{compatible:true,backend_version:'8.49'}}:
    p.action==='status'?(++statusCalls===1?oldStatus:{ok:true,state:{active:{id:'accepted',status:'downloading'}}}):{ok:true,job_id:'accepted'});
  const pending=f.receive({type:'kitty-pill-status'});await flush();await f.receive({type:'kitty-add-download'});
- const current=await f.receive({type:'kitty-pill-status'});assert.equal(current.state.active.id,'accepted');assert.equal(statusCalls,2);
+ const currentRequest=f.receive({type:'kitty-pill-status'});await flush();assert.equal(statusCalls,2);
+ const current=await currentRequest;assert.equal(current.state.active.id,'accepted');
  resolveOld({ok:true,state:{active:null,queue:[],history:[]}});await pending;
  const cached=await f.receive({type:'kitty-pill-status'});assert.equal(cached.state.active.id,'accepted');assert.equal(statusCalls,2);
 });
