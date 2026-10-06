@@ -23,6 +23,7 @@ jobs:
           curl -fsSL https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz | tar -xz -C "$RUNNER_TEMP"
       - run: |
           node tests/test-pill-robust.js
+          node tests/test-pill-spa-context.js
           node tests/test-media-context-startup.js
           KITTY_FIREFOX_BINARY="$RUNNER_TEMP/firefox/firefox" KITTY_GECKODRIVER="$RUNNER_TEMP/geckodriver" KITTY_TEST_MEDIA_TRACKS=hls KITTY_TEST_PILL_REPRODUCTION=1 python tests/test-hls-firefox.py
           cp artifacts/download-equivalence/firefox-report.json artifacts/pill-reproduction.json
@@ -66,6 +67,8 @@ jobs:
           'C:\ProgramData\chocolatey\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: |
           node tests/test-pill-robust.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test-pill-spa-context.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test-media-context-startup.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -9,6 +9,8 @@ let compatibilityPromise = null;
 let cachedStatus = null;
 let cachedAt = 0;
 let statusPromise = null;
+let statusGeneration = 0;
+let statusPromiseGeneration = 0;
 
 const CONTEXT_MENU_ID = "kitty-download-with-kitty";
 const CONTEXT_MENU_CONTEXTS = Object.freeze([
@@ -111,7 +113,7 @@ async function currentDocumentSender(message,sender) {
   const context=await browser.tabs.sendMessage(tab.id,{type:'kitty-document-context'},
     sender.documentId?{documentId:sender.documentId}:{frameId});
   if(context?.pageUrl!==pageUrl || context?.documentToken!==message.documentToken)return null;
-  return {...sender,tab,url:pageUrl};
+  return {...sender,tab,url:pageUrl,initialUrl:sender.url};
 }
 async function hlsForTab(tabId) {
   if (!hlsStore || !Number.isInteger(tabId)) return [];
@@ -462,6 +464,7 @@ async function addDownload(message,sender) {
     if(!current)return {ok:false,code:'stale_document',error:'Le document ciblé a changé. Recharge la page puis réessaie.'};
     downloadTrace(message,'tab',{sameDocumentNavigation:current.url!==sender.url,documentId:sender.documentId||null,url:diagnosticUrl(current.url)});
   }
+  downloadTrace(message,'settings');
   const settings=await downloadSettings(tabId);
   let mode=await savedDownloadMode();
   const saved=await browser.storage.local.get(['playlistMode','selectedMode','imageOnlyMode']);
@@ -585,9 +588,11 @@ async function getStatusCached(force = false) {
   const ttl = active ? 450 : 1800;
 
   if (!force && cachedStatus && now - cachedAt < ttl) return cachedStatus;
-  if (statusPromise) return statusPromise;
+  if (statusPromise && statusPromiseGeneration === statusGeneration) return statusPromise;
 
-  statusPromise = nativeMessage({ action: "status" })
+  const generation=statusGeneration;
+  statusPromiseGeneration=generation;
+  const pending = nativeMessage({ action: "status" })
     .then(result => {
       for(const job of [result?.state?.active,...(result?.state?.queue||[]),...(result?.state?.history||[])].filter(Boolean)){
         const trace=downloadJobTraces.get(job.id);
@@ -598,18 +603,19 @@ async function getStatusCached(force = false) {
         downloadTrace(trace.message,'job_status',{jobId:job.id,status:job.status,metadataStatus:job.metadata_status,
           progress:KittyShared.jobPercent(job),code:job.error_code,error:job.error,error_hint:job.error_hint,error_detail:job.error_detail});
       }
-      cachedStatus = result;
-      cachedAt = Date.now();
+      if(generation===statusGeneration){cachedStatus = result;cachedAt = Date.now();}
       return result;
     })
     .finally(() => {
-      statusPromise = null;
+      if(statusPromise===pending)statusPromise = null;
     });
 
-  return statusPromise;
+  statusPromise=pending;
+  return pending;
 }
 
 function invalidateStatus() {
+  statusGeneration++;
   cachedStatus = null;
   cachedAt = 0;
 }

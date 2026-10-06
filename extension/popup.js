@@ -2208,7 +2208,7 @@ copyDiagnosticsBtn.addEventListener("click", async () => {
     const nativeText=r?.ok?diagnosticsToText(r.diagnostics):`Native Host: ${backendErrorMessage(r)}`;
     const ok = await copyText(nativeText+'\n\nShared popup/pill download trace:\n'+JSON.stringify(frontend?.events||[],null,2));
     if (!ok) throw new Error("Impossible de copier dans le presse-papiers.");
-    setSettingsStatus("Diagnostic copié · sans URL, titre ni cookie.", "success");
+    setSettingsStatus("Diagnostic copié · cookies et secrets masqués.", "success");
   } catch (err) {
     setSettingsStatus("Erreur : " + err.message, "error");
   } finally {

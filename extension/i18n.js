@@ -343,6 +343,7 @@
   "Logs ouverts.": "Logs opened.",
   "Préparation du diagnostic local…": "Preparing local diagnostics…",
   "Diagnostic copié · sans URL, titre ni cookie.": "Diagnostics copied · no URL, title or cookie included.",
+  "Diagnostic copié · cookies et secrets masqués.": "Diagnostics copied · cookies and secrets redacted.",
   "Confirmer la réinitialisation": "Confirm reset",
   "Clique une seconde fois pour confirmer.": "Click a second time to confirm.",
   "Réinitialisation de Kitty…": "Resetting Kitty…",

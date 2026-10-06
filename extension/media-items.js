@@ -63,7 +63,7 @@
     if(c.tab_id!==undefined&&c.tab_id!==tabId)return 'wrong_tab';
     if(c.page_url&&c.page_url!==page)return 'wrong_page';
     if(c.frame_id!==context.frameId&&!(c.frame_ids||[]).includes(context.frameId))return 'wrong_frame';
-    if(c.document_url&&c.document_url!==context.frameUrl)return 'wrong_document';
+    if(c.document_url&&c.document_url!==context.frameUrl&&c.document_url!==context.initialUrl)return 'wrong_document';
     return null;
   }
   function domProof(a,b,context,relationships,cue=domCue) {
@@ -117,7 +117,7 @@
         const old=previous?.items.find(i=>i.resourceUrl===dom.resourceUrl);
         if(old){dom.sources=old.sources;dom.duration ||= old.duration;dom.height ||= old.height;dom.width ||= old.width;}
       }
-      tab.frames.set(frameId,{frameUrl,items:safe});return true;
+      tab.frames.set(frameId,{frameUrl,initialUrl:sender.initialUrl,items:safe});return true;
     }
     list(tabId,page,catalogue=[]) {
       const tab=this.tabs.get(tabId);if(!tab||tab.page!==page)return [];
@@ -132,7 +132,7 @@
       // every pair of DOM players in a large gallery.
       for(const [frameId,frame] of tab.frames) {
         const links=new Map();relationships.set(frameId,links);
-        for(const c of catalogue)if(!scope(c,tabId,page,{frameId,frameUrl:frame.frameUrl}))
+        for(const c of catalogue)if(!scope(c,tabId,page,{frameId,frameUrl:frame.frameUrl,initialUrl:frame.initialUrl}))
           for(const url of candidateCue(c).keys){const groups=links.get(url)||[];groups.push(candidateKey(c));links.set(url,groups);}
       }
       const decide=(kind,subject,target,action,reason,signals=[])=>{
@@ -141,7 +141,7 @@
         decisions.set(id,{kind,subject,target,action,reason,signals});
       };
       for(const [frameId,frame] of tab.frames)for(const dom of frame.items) {
-        const context={frameId,frameUrl:frame.frameUrl,dom},strong=cue(dom).strong;
+        const context={frameId,frameUrl:frame.frameUrl,initialUrl:frame.initialUrl,dom},strong=cue(dom).strong;
         const identity=strong || [...cue(dom).keys].sort().join('|');
         let item=null;
         for(const other of logical) {

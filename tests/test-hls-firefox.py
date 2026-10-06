@@ -40,7 +40,7 @@ if TRACKS:
  test=fixtures.HlsTracks if TRACKS=='hls' else fixtures.DashTracks
 test.setUpClass()
 if EQUIVALENCE:
- subprocess.run(['ffmpeg','-v','error','-i',str(test.media/'vimeo/english/media.m3u8'),'-c','copy',str(test.media/'native.m4a')],check=True,timeout=20)
+ subprocess.run(['ffmpeg','-v','error','-i',str(test.media/'normal.mp4'),'-vn','-c:a','copy',str(test.media/'native.m4a')],check=True,timeout=20)
  original_response=test.extra_response
  def equivalence_response(cls,url,headers):
   if url.split('?')[0]=='/native.m4a':return 200,'audio/mp4',(cls.media/'native.m4a').read_bytes()
@@ -51,6 +51,11 @@ driver=None
 context_server=None
 context_seen=[]
 registry=Path.home()/'.mozilla/native-messaging-hosts/com.kitty.download_manager.json'
+# A machine has one manifest for this native host. Parallel fixtures must not
+# redirect each other's Firefox native messages to another temporary queue.
+import fcntl
+native_registry_lock=open('/tmp/kitty-native-firefox-qa.lock','a')
+fcntl.flock(native_registry_lock,fcntl.LOCK_EX)
 original=registry.read_bytes() if registry.exists() else None
 try:
  with tempfile.TemporaryDirectory(prefix='kitty-hls-firefox-') as temp:
@@ -194,7 +199,7 @@ window.qa=async function(action,args={}) {
    assert entry['status']=='finished',entry
    media=Path(entry['filepath']);assert media.is_file()
    return json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',str(media)],timeout=15))['streams']
-  def verify_context(previous_id):
+  def verify_context(previous_id,spa=False):
    global context_server
    class ContextHandler(BaseHTTPRequestHandler):
     def cors(self):
@@ -212,11 +217,14 @@ window.qa=async function(action,args={}) {
    context_server=ThreadingHTTPServer(('127.0.0.1',0),ContextHandler)
    threading.Thread(target=context_server.serve_forever,daemon=True).start()
    value('navigate',url=test.base+'/unsupported?request-context');wait(lambda:value('catalogue')==[]);time.sleep(.6)
+   context_page=test.base+'/unsupported?request-context'
+   if spa:
+    context_page=test.base+'/unsupported?request-context-spa';value('spa',url=context_page);time.sleep(.3)
    harness_handle=driver.current_window_handle
    source_handle=None
    for handle in driver.window_handles:
     driver.switch_to.window(handle)
-    if driver.current_url==test.base+'/unsupported?request-context':source_handle=handle;break
+    if driver.current_url==context_page:source_handle=handle;break
    assert source_handle,'Source page tab missing'
    loaded=driver.execute_async_script("const [url,done]=arguments;document.cookie='context_session=PRIVATE-CONTEXT-SESSION; path=/';fetch(url,{credentials:'include',headers:{Authorization:'Bearer PRIVATE-CONTEXT-AUTH','X-Media-Key':'PRIVATE-CONTEXT-KEY'}}).then(async r=>{await r.arrayBuffer();done({ok:r.ok,status:r.status});}).catch(()=>done({ok:false,error:'page_fetch_failed'}));",f'http://127.0.0.1:{context_server.server_port}/protected.mp4')
    driver.switch_to.window(harness_handle)
@@ -225,7 +233,11 @@ window.qa=async function(action,args={}) {
    assert context_seen and all(h.get('Authorization')=='Bearer PRIVATE-CONTEXT-AUTH' and 'context_session=PRIVATE-CONTEXT-SESSION' in (h.get('Cookie') or '') and h.get('Referer')==test.base+'/' and h.get('Origin')==test.base for h in context_seen),{'requests':len(context_seen),'signals':[{name:bool(h.get(name)) for name in ['Referer','Origin','User-Agent','Cookie','Authorization']} for h in context_seen]}
    wait(lambda:len(value('catalogue'))==1)
    summary=value('context-summary');assert summary['session'] and {'Referer','Origin','User-Agent','Authorization','x-media-key'}.issubset(summary['headers']),summary
-   result=value('context-download',id=summary['id']);assert result['ok'],result
+   if spa:
+    value('dom',html=f'<video preload="none" src="http://127.0.0.1:{context_server.server_port}/protected.mp4"></video>')
+    value('pill')
+   else:
+    result=value('context-download',id=summary['id']);assert result['ok'],result
    entry=wait(lambda:finished(previous_id));streams(entry)
    assert context_seen and all(h.get('Authorization')=='Bearer PRIVATE-CONTEXT-AUTH' for h in context_seen),len(context_seen)
    assert all(h.get('User-Agent')==context_seen[0].get('User-Agent') for h in context_seen)
@@ -291,6 +303,8 @@ window.qa=async function(action,args={}) {
    assert detail['state']=='error' and failed.get('error') in detail['title'],detail
    report['metadataFailure']={k:failed.get(k) for k in ('status','error_code','error','error_detail')}
    report['checks'].append('Actual failed metadata/source produces a persistent pill error from the tracked backend job')
+   value('native',payload={'action':'clear_history'});verify_context(None,spa=True)
+   report['checks'].append('After same-document navigation, pill preserves captured Authorization/cookie/header context and completes a real protected transfer')
   elif EQUIVALENCE:
    def clear_equivalence_history():
     # Let the visible pill consume completion before removing that job from
@@ -664,4 +678,5 @@ finally:
  if context_server:context_server.shutdown();context_server.server_close()
  test.tearDownClass()
  (OUTPUT/'firefox-report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+ native_registry_lock.close()
 print(json.dumps(report,ensure_ascii=False,indent=2))

@@ -1673,7 +1673,9 @@ def test_error_ui_contract():
     check("last.error_hint" in popup, "hint final absent")
     check('job.error || "Erreur du backend"' in popup, "raison historique absente")
     check("itemError" in html, "style erreur historique absent")
-    check('setVisualState("error", located.job.error || "Erreur")' in pill, "pill n’affiche pas le message backend")
+    check('KittyShared.downloadErrorText(located.job' in pill, "pill n’affiche pas le message backend partagé")
+    shared = (EXT / "shared.js").read_text(encoding="utf-8")
+    check('source?.error_hint' in shared and 'source?.error_detail' in shared, "détails et conseil backend absents du helper partagé")
 
 
 def test_frontend_backend_compatibility_contract():

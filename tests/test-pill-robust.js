@@ -58,6 +58,16 @@ test('backend unavailable preserves native exception',async()=>{
  const r=await f.receive({type:'kitty-add-download'});assert.equal(r.ok,false);assert.match(JSON.stringify(r),/Native host disconnected: fixture/);
  assert.equal(r.code,'native_host_unavailable');assert.ok(r.stage);
 });
+test('enqueue invalidates an older status promise without overwriting the new cache',async()=>{
+ const f=fixture(page);f.setItems([player('youtube',null)]);let resolveOld,statusCalls=0;
+ const oldStatus=new Promise(r=>resolveOld=r);
+ f.setNativeHandler(async p=>p.action==='compatibility'?{ok:true,compatibility:{compatible:true,backend_version:'8.49'}}:
+   p.action==='status'?(++statusCalls===1?oldStatus:{ok:true,state:{active:{id:'accepted',status:'downloading'}}}):{ok:true,job_id:'accepted'});
+ const pending=f.receive({type:'kitty-pill-status'});await flush();await f.receive({type:'kitty-add-download'});
+ const current=await f.receive({type:'kitty-pill-status'});assert.equal(current.state.active.id,'accepted');assert.equal(statusCalls,2);
+ resolveOld({ok:true,state:{active:null,queue:[],history:[]}});await pending;
+ const cached=await f.receive({type:'kitty-pill-status'});assert.equal(cached.state.active.id,'accepted');assert.equal(statusCalls,2);
+});
 test('metadata/backend error retains HTTP detail and stage',async()=>{
  const f=fixture(page);f.setItems([player('youtube',null)]);f.setNativeHandler(async p=>p.action==='compatibility'?{ok:true,compatibility:{compatible:true,backend_version:'8.49'}}:{ok:false,code:'metadata_failed',error:'Metadata failed',error_detail:'HTTP Error 403: Forbidden',error_hint:'Check session'});
  const r=await f.receive({type:'kitty-add-download'});assert.equal(r.code,'metadata_failed');assert.equal(r.error_detail,'HTTP Error 403: Forbidden');assert.equal(r.stage,'native_response');assert.equal(f.downloads().length,1);
@@ -75,7 +85,7 @@ test('sanitized trace reports fields, defaults, stage, request and job IDs',asyn
  const f=fixture('https://site.test/watch?token=SECRET');delete f.saved.selectedMode;f.setItems([player('main','https://cdn.test/file.mp4?token=SECRET')]);
  await f.receive({type:'kitty-add-download'});const trace=await f.receive({type:'kitty-download-diagnostics'},ui);
  assert.equal(trace.ok,true);const text=JSON.stringify(trace);assert.ok(!text.includes('SECRET'));assert.ok(!text.includes('token='));
- assert.ok(trace.events.some(e=>e.stage==='settings'&&e.defaults.includes('mode:1080')));
+ assert.ok(trace.events.some(e=>e.stage==='settings'&&e.defaults?.includes('mode:1080')));
  assert.ok(trace.events.some(e=>e.stage==='native_request'&&e.fields.includes('media_item')));
  assert.ok(trace.events.some(e=>e.stage==='accepted'&&e.jobId));assert.ok(trace.events.every(e=>e.requestId));
  assert.equal((await f.receive({type:'kitty-download-diagnostics'})).ok,false);
