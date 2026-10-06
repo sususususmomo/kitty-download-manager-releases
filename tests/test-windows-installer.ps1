@@ -17,13 +17,14 @@ function Assert-Rejected([string]$Path) {
     if (-not $rejected) { throw ('Chemin errone accepte : ' + $Path) }
 }
 
-$base = Join-Path $env:TEMP ('kitty-path-tests-' + [Guid]::NewGuid().ToString('N'))
+$base = [IO.Path]::GetFullPath((Join-Path $env:TEMP ('kitty-path-tests-' + [Guid]::NewGuid().ToString('N'))))
 $previousLocal = $env:LOCALAPPDATA
 try {
     [IO.Directory]::CreateDirectory($base) | Out-Null
     $env:LOCALAPPDATA = $base
     $path = Join-Path $base 'Kitty Francais & 100% !'
-    if ((Resolve-KittyDirectory ('"' + $path + '"')) -ne $path) { throw 'Chemin avec espaces incorrect.' }
+    $resolved = Resolve-KittyDirectory ('"' + $path + '"')
+    if ($resolved -ne $path) { throw "Chemin avec espaces incorrect : [$resolved] au lieu de [$path]." }
     if (Test-Path -LiteralPath $path) { throw 'La validation a cree le dossier.' }
     Assert-Rejected 'relative\Kitty'
     Assert-Rejected ([IO.Path]::GetPathRoot($base))
