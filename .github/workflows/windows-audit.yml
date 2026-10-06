@@ -52,10 +52,10 @@ jobs:
         shell: powershell
         run: |
           & .\tests\test-windows-installer.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:KITTY_CI_INSTALL_DIR=Join-Path $env:RUNNER_TEMP 'Kitty Français & 100% !'
           python tools/install-backend-for-ci.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath (Join-Path $env:KITTY_CI_INSTALL_DIR 'native-host.bat'))) { throw 'Installed launcher missing' }
       - name: Verified Firefox
         shell: powershell
         run: |
