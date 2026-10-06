@@ -21,6 +21,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 import unittest
+import uuid
 from unittest.mock import patch
 import zipfile
 
@@ -498,19 +499,31 @@ class WindowsProcessTests(unittest.TestCase):
     def fake_ytdlp(self):
         fake = self.base / "fake"
         fake.mkdir()
-        (fake / "yt_dlp.py").write_text('''import time
+        # Only replace network extraction. Keep the production Windows job,
+        # spawn flags, IPC watcher, signal handling and queue mutations intact.
+        self.fixture = fake / "offline_worker.py"
+        self.fixture.write_text('''import sys, time, types
+sys.path.insert(0, sys.argv[1])
+import worker
+worker.install_ffmpeg_timeouts=lambda: None
 class YoutubeDL:
- def __init__(self, opts): self.opts=opts
+ def __init__(self, opts): pass
  def __enter__(self): return self
  def __exit__(self, *args): pass
- def extract_info(self, url, download=False):
+ def extract_info(self, *args, **kwargs):
   while True: time.sleep(.05)
+sys.modules['yt_dlp']=types.SimpleNamespace(YoutubeDL=YoutubeDL)
+worker.extract_metadata=lambda options,job,*callbacks: YoutubeDL(options).extract_info()
+sys.argv=[str(worker.WORKER),sys.argv[3]]
+raise SystemExit(worker.main())
 ''', encoding="utf-8")
-        self.env["PYTHONPATH"] = str(fake)
+
+    def worker_command(self):
+        return [sys.executable, str(self.fixture), str(NATIVE), str(NATIVE / "worker.py"), "test-job"]
 
     def worker(self):
         self.fake_ytdlp()
-        proc = subprocess.Popen([sys.executable, str(NATIVE / "worker.py"), "test-job"], env=self.env,
+        proc = subprocess.Popen(self.worker_command(), env=self.env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, **platform_api.spawn_options())
         def cleanup_worker():
             if proc.poll() is None:
@@ -606,11 +619,11 @@ class YoutubeDL:
 sys.path.insert(0, sys.argv[1])
 from platform_support import configure_worker_job, spawn_options
 configure_worker_job()
-p=subprocess.Popen([sys.executable, sys.argv[1]+"/worker.py", "test-job"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options())
+p=subprocess.Popen([sys.executable, sys.argv[2], sys.argv[1], sys.argv[1]+"/worker.py", "test-job"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **spawn_options())
 print(p.pid, flush=True)
 time.sleep(1)
 ''', encoding="utf-8")
-        result = subprocess.run([sys.executable, str(helper), str(NATIVE)], env=self.env,
+        result = subprocess.run([sys.executable, str(helper), str(NATIVE), str(self.fixture)], env=self.env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         pid = int(result.stdout.strip())

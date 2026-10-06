@@ -56,7 +56,7 @@ class YoutubeSessionTests(unittest.TestCase):
 
     def test_windows_opens_separate_profile_and_private_environment(self):
         result, launch = self.start()
-        self.assertTrue(result["ok"])
+        self.assertTrue(result["ok"], result)
         self.assertEqual(result["state"], "browser_open")
         paths = host._youtube_session_paths(host._youtube_pending_load()["token"])
         args, kwargs = launch.call_args
@@ -79,7 +79,7 @@ class YoutubeSessionTests(unittest.TestCase):
             self.assertFalse(host.YOUTUBE_COOKIE_FILE.exists())
         with patch.object(host, "firefox_uses_profile", return_value=False):
             result = host.youtube_auth_status()
-        self.assertTrue(result["ok"])
+        self.assertTrue(result["ok"], result)
         self.assertTrue(result["configured"])
         self.assertTrue(result["enabled"])
         self.assertFalse(paths["root"].exists())

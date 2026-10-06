@@ -693,7 +693,8 @@ def _extract_youtube_cookies_from_profile(profile, destination):
         os.umask(old_umask)
 
     os.chmod(destination, 0o600)
-    with open(destination, "rb") as f:
+    # Windows _commit/FlushFileBuffers requires a writable file handle.
+    with open(destination, "rb+") as f:
         os.fsync(f.fileno())
 
     return {
