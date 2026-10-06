@@ -3693,7 +3693,9 @@ def diagnostics(deep=False, client=None):
     Il ne lance aucun accès réseau, ne lit aucun titre/URL de job et ne copie
     aucune valeur de cookie.
     """
-    state = repair_state()
+    # Diagnostics must remain available when process support is broken, and
+    # must not repair/archive jobs while explaining that dependency failure.
+    state = read_state(QUEUE_FILE, LOCK_FILE)
     active = state.get("active") or {}
     desktop = (
         os.environ.get("XDG_CURRENT_DESKTOP", "")

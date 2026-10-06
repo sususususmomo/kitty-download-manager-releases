@@ -154,6 +154,23 @@ class WindowsAuditTests(unittest.TestCase):
             resumed = SourceRefresh({'formats': []}, None, lambda *_: None, checkpoint=checkpoint)
             self.assertEqual(resumed.ledger, ledger)
 
+    def test_diagnostics_remain_available_with_invalid_process_support(self):
+        from queue_store import atomic_json, default_state
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            queue = root / 'queue.json'
+            state = default_state()
+            state['active'] = {'id': 'protected', 'status': 'downloading', 'worker_pid': 123}
+            atomic_json(queue, state)
+            protected = queue.read_bytes()
+            with patch.multiple(host, WINDOWS=True, QUEUE_FILE=queue, LOCK_FILE=root / 'queue.lock'), \
+                 patch.dict(sys.modules, {'psutil': SimpleNamespace()}), \
+                 patch.object(host, 'repair_state', side_effect=AssertionError('Diagnostic must not repair jobs')):
+                result = host.diagnostics()
+            self.assertTrue(result['ok'], result)
+            self.assertIn('psutil', result['dependencies']['required_missing'])
+            self.assertEqual(queue.read_bytes(), protected)
+
     def test_unreadable_preferences_are_never_overwritten_with_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
