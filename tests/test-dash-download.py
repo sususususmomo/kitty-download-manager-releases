@@ -31,7 +31,7 @@ class DashTests(base.HlsTests):
     '-b:v:0','80k','-g','10','-sc_threshold','0','-c:a','aac']
    if multi:cmd+=['-filter:v:1','scale=1920:1080','-b:v:1','120k']
    cmd+=['-f','dash','-seg_duration','1','-use_template','1','-use_timeline','1',
-    '-adaptation_sets','id=0,streams=v id=1,streams=a',str(folder/'manifest.mpd')]
+    '-adaptation_sets','id=0,streams=v id=1,streams=a',(folder/'manifest.mpd').as_posix()]
    subprocess.run(cmd,check=True,timeout=30)
   cls.slow_manifest=threading.Event()
   import struct,zlib

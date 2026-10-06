@@ -25,11 +25,11 @@ class HlsGroupTests(base.HlsTests):
    subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'color=c=green:s={height*16//9}x{height}:r=10',
     '-t','2','-an','-c:v','libx264','-threads','1','-preset','ultrafast','-g','10','-sc_threshold','0',
     '-f','hls','-hls_time','1','-hls_list_size','0','-hls_segment_type','fmp4','-hls_fmp4_init_filename','init.mp4',
-    '-hls_segment_filename',str(target/'seg%03d.m4s'),str(target/'media.m3u8')],check=True,timeout=25)
+    '-hls_segment_filename',(target/'seg%03d.m4s').as_posix(),(target/'media.m3u8').as_posix()],check=True,timeout=25)
   target=folder/'audio';target.mkdir()
   subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','sine=frequency=550:sample_rate=44100','-t','2',
    '-vn','-c:a','aac','-f','hls','-hls_time','1','-hls_list_size','0','-hls_segment_type','fmp4',
-   '-hls_fmp4_init_filename','init.mp4','-hls_segment_filename',str(target/'seg%03d.m4s'),str(target/'media.m3u8')],check=True,timeout=25)
+   '-hls_fmp4_init_filename','init.mp4','-hls_segment_filename',(target/'seg%03d.m4s').as_posix(),(target/'media.m3u8').as_posix()],check=True,timeout=25)
   target=folder/'subtitles';target.mkdir()
   (target/'media.m3u8').write_text('#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\ncaption.vtt\n#EXT-X-ENDLIST\n')
   (target/'caption.vtt').write_text('WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nKitty HLS fixture\n')

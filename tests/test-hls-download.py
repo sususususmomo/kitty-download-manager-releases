@@ -33,7 +33,7 @@ class HlsTests(unittest.TestCase):
     '-threads','1','-preset','ultrafast','-g','10','-sc_threshold','0','-c:a','aac','-f','hls',
     '-hls_time','1','-hls_list_size','0']
    if kind=='fmp4':cmd+=['-hls_segment_type','fmp4','-hls_fmp4_init_filename','init.mp4']
-   cmd+=['-hls_segment_filename',str(directory/('seg%03d.m4s' if kind=='fmp4' else 'seg%03d.ts')),str(directory/'index.m3u8')]
+   cmd+=['-hls_segment_filename',(directory/('seg%03d.m4s' if kind=='fmp4' else 'seg%03d.ts')).as_posix(),(directory/'index.m3u8').as_posix()]
    subprocess.run(cmd,check=True,timeout=25)
   cls.requests=[];cls.lock=threading.Lock();cls.segment_seen=threading.Event();cls.manifest_seen=threading.Event();cls.slow=False
   class Handler(BaseHTTPRequestHandler):

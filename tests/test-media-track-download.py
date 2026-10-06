@@ -118,7 +118,7 @@ class HlsTracks(TransferMixin,hls_fixture.HlsGroupTests):
             target=folder/name;target.mkdir()
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i',f'sine=frequency={freq}:sample_rate=44100','-t','2',
                 '-vn','-c:a','aac','-f','hls','-hls_time','1','-hls_list_size','0','-hls_segment_type','fmp4',
-                '-hls_fmp4_init_filename','init.mp4','-hls_segment_filename',str(target/'seg%03d.m4s'),str(target/'media.m3u8')],check=True,timeout=25)
+                '-hls_fmp4_init_filename','init.mp4','-hls_segment_filename',(target/'seg%03d.m4s').as_posix(),(target/'media.m3u8').as_posix()],check=True,timeout=25)
         (folder/'subtitles/caption.vtt').write_text('WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nKitty French caption\n')
         master=cls.group_master.replace('audio/media.m3u8?token=AUDIO%2BSECRET&asset=one','english/media.m3u8')
         master=master.replace('#EXT-X-VERSION:7','#EXT-X-VERSION:7\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio-low",NAME="French",LANGUAGE="fr",DEFAULT=NO,AUTOSELECT=YES,URI="french/media.m3u8"')
@@ -134,7 +134,7 @@ class DashTracks(TransferMixin,dash_fixture.DashTests):
             '-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-f','lavfi','-i','sine=frequency=880:sample_rate=44100',
             '-t','2','-map','0:v','-map','1:a','-map','2:a','-c:v','libx264','-threads','1','-preset','ultrafast','-g','10',
             '-c:a','aac','-metadata:s:a:0','language=en','-metadata:s:a:1','language=fr','-f','dash','-seg_duration','1',
-            '-adaptation_sets','id=0,streams=v id=1,streams=1 id=2,streams=2',str(folder/'manifest.mpd')],check=True,timeout=30)
+            '-adaptation_sets','id=0,streams=v id=1,streams=1 id=2,streams=2',(folder/'manifest.mpd').as_posix()],check=True,timeout=30)
         tree=ET.parse(folder/'manifest.mpd');root=tree.getroot();ns='{urn:mpeg:dash:schema:mpd:2011}'
         for adaptation in root.iter(ns+'AdaptationSet'):
             lang=adaptation.get('lang')
