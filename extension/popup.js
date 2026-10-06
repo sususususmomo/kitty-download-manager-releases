@@ -276,6 +276,12 @@ function setModeMenuOpen(open) {
   modeButtonEl.setAttribute("aria-expanded", modeMenuOpen ? "true" : "false");
 }
 
+async function rememberCollectionTarget() {
+  const [tab]=await browser.tabs.query({active:true,currentWindow:true});
+  if(tab)await browser.runtime.sendMessage({type:'kitty-download-settings',tabId:tab.id,
+    change:{collectionUrl:playlistModeEnabled?playlistUrlEl.value.trim():null}});
+}
+
 function setPlaylistMode(enabled, { persist = true } = {}) {
   if (imageOnlyModeEnabled) return;
   playlistModeEnabled = Boolean(enabled);
@@ -293,6 +299,7 @@ function setPlaylistMode(enabled, { persist = true } = {}) {
       playlistMode: playlistModeEnabled,
       playlistUrl: playlistUrlEl.value
     }).catch(() => {});
+    rememberCollectionTarget().catch(()=>{});
   }
 }
 
@@ -2452,6 +2459,11 @@ async function restoreModeSelection() {
     playlistUrlEl.value =
       typeof saved?.playlistUrl === "string" ? saved.playlistUrl : "";
     playlistModeEnabled = Boolean(saved?.playlistMode);
+    if(playlistModeEnabled) {
+      const [tab]=await browser.tabs.query({active:true,currentWindow:true});
+      const scoped=tab&&await browser.runtime.sendMessage({type:'kitty-download-settings',tabId:tab.id});
+      if(scoped?.ok){playlistUrlEl.value=scoped.collectionUrl||'';playlistModeEnabled=Boolean(scoped.collectionUrl);}
+    }
     imageOnlyModeEnabled = Boolean(saved?.imageOnlyMode);
   } catch {}
 
@@ -2498,6 +2510,7 @@ imageOnlyModeToggleEl.addEventListener("click", () => {
 playlistUrlEl.addEventListener("input", () => {
   updatePlaylistUrlStatus();
   browser.storage.local.set({ playlistUrl: playlistUrlEl.value }).catch(() => {});
+  rememberCollectionTarget().catch(()=>{});
 });
 
 playlistUrlEl.addEventListener("keydown", event => {
@@ -2579,11 +2592,9 @@ async function submitPlaylistDownload() {
   try {
     // Le background possède la requête : fermer la popup pendant l’analyse
     // ne doit pas couper le Native Messaging host.
-    const r = await browser.runtime.sendMessage({
-      type: "kitty-download-playlist",
-      url: playlistUrl,
-      mode: modeEl.value
-    });
+    await rememberCollectionTarget();
+    const [tab]=await browser.tabs.query({active:true,currentWindow:true});
+    const r = await browser.runtime.sendMessage({type:'kitty-add-download',tabId:tab?.id});
 
     if (!r?.ok) {
       throw new Error(backendErrorMessage(r, "Impossible d’ajouter cette playlist."));
@@ -2634,31 +2645,14 @@ downloadBtn.addEventListener("click", async () => {
 
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    const itemSelection = !imageOnlyModeEnabled && globalThis.KittyItemsPopup?.selection(tab?.id);
-    const hlsSelection = !itemSelection && globalThis.KittyMediaPopup?.selection(tab?.id);
-    const downloadUrl = itemSelection ? `item:${tab.id}:${itemSelection}` : hlsSelection ? `media:${tab.id}:${hlsSelection}` : await resolveTabDownloadUrl(tab);
-
-    const samePending =
-      pendingDuplicate &&
-      pendingDuplicate.url === downloadUrl &&
-      pendingDuplicate.mode === effectiveDownloadMode();
-
-    const force = Boolean(samePending);
-    statusEl.textContent = force ? "Nouveau téléchargement…" : "Démarrage…";
-
-    const payload = {url:downloadUrl, mode:effectiveDownloadMode(), force,
-      ...(itemSelection?{track_selection:globalThis.KittyItemsPopup?.trackSelection(tab.id,itemSelection)}:{})};
-    const r = itemSelection
-      ? await browser.runtime.sendMessage({...payload,type:"kitty-download-item",tabId:tab.id,itemId:itemSelection})
-      : hlsSelection
-      ? await browser.runtime.sendMessage({...payload, type:"kitty-download-media", tabId:tab.id, candidateId:hlsSelection})
-      : globalThis.KittyMediaPopup?.hasCandidates(tab?.id)
-        ? await browser.runtime.sendMessage({...payload, type:"kitty-download-page", tabId:tab.id})
-        : await nativeMessage({action: "download", ...payload});
+    const downloadUrl=tab?.url;
+    statusEl.textContent = pendingDuplicate ? "Nouveau téléchargement…" : "Démarrage…";
+    const r = await browser.runtime.sendMessage({type:"kitty-add-download",tabId:tab?.id,
+      forceToken:pendingDuplicate?.requestKey});
 
     if (!r?.ok) {
       if (r?.code === "already_downloaded") {
-        pendingDuplicate = { url: downloadUrl, mode: effectiveDownloadMode() };
+        pendingDuplicate = { url: downloadUrl, mode: effectiveDownloadMode(),requestKey:r.requestKey };
         downloadBtn.textContent = "Retélécharger quand même";
         downloadBtn.classList.add("duplicatePending");
         setDownloadSectionPhase("duplicate");

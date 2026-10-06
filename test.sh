@@ -6,5 +6,8 @@ python3 "$ROOT/tests/test-youtube-session.py"
 python3 "$ROOT/tests/test-windows-audit.py"
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/tests/test-youtube-session-ui.js"
+  node "$ROOT/tests/test-pill-download.js"
+  node "$ROOT/tests/test-pill-ui.js"
+  node "$ROOT/tests/test-popup-tracks.js"
 fi
 exec python3 "$ROOT/tests/run-regression.py" "$@"

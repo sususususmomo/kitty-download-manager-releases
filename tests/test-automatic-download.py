@@ -49,9 +49,9 @@ class AutomaticTests(fixture.DashTests):
  def candidate_source(self,kind='hls',path='/master.m3u8',page='/normal'):
   return hls.validate_source(dict(type=kind,url=self.base+path,page_url=self.base+page,tab_id=1,
     timestamp=time.time(),headers={},title='Automatic local video',manifest_kind='master'))
- def automatic(self,sources=None,url='/normal',mode='1080'):
+ def automatic(self,sources=None,url='/normal',mode='1080',**preferences):
   active=dict(id='fixture',url=self.base+url,mode=mode,output_dir=str(self.output),status='starting',
-    started_at=time.time(),youtube_auth=False,automatic=True,media_fallbacks=sources or [])
+    started_at=time.time(),youtube_auth=False,automatic=True,media_fallbacks=sources or [],**preferences)
   queue_store.atomic_json(worker.QUEUE_FILE,{**queue_store.default_state(),'active':active})
   with patch.object(sys,'argv',['worker.py','fixture']):code=worker.main()
   state=worker.get_state();self.assertIsNone(state['active']);self.assertEqual(len(state['history']),1)
@@ -95,6 +95,30 @@ class AutomaticTests(fixture.DashTests):
   self.assertEqual(len(self.transfers),2);self.assertTrue(any('fallback to next candidate: ytdlp'==line for line in self.logs))
   self.assertTrue(any('candidate score:' in line for line in self.logs));self.assertNotIn('Expired token','\n'.join(self.logs))
   self.assertEqual(len(list(self.output.iterdir())),1)
+ def test_unavailable_video_on_audio_only_page_uses_automatic_audio(self):
+  source=self.candidate_source('direct_audio','/native.m4a','/unsupported')
+  code,entry=self.automatic([source],url='/unsupported',mode='best',track_policy='prefer_available',
+      track_selection={'audioLanguage':'de','subtitleLanguages':['de']})
+  self.assertEqual(code,0,entry);self.assertEqual(entry['status'],'finished',entry)
+  self.assertEqual(entry['mode'],'best');self.assertEqual(entry['effective_mode'],'audio')
+  streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',entry['filepath']]))['streams']
+  self.assertEqual({s['codec_type'] for s in streams},{'audio'});self.assertEqual(streams[0]['codec_name'],'aac')
+  self.assertEqual(entry['download_plan']['subtitleLanguages'],[])
+ def test_preferred_source_runtime_failure_keeps_mp3_and_adapts_missing_captions(self):
+  original=worker.resolve_candidates
+  def expire(*args,**kwargs):
+   result=original(*args,**kwargs);self.assertEqual(result[0].source.get('id'),'preferred');type(self).runtime_expired=True;return result
+  self.stack.enter_context(patch.object(worker,'resolve_candidates',expire))
+  source={**self.candidate_source(path='/runtime/master.m3u8'),'id':'preferred'}
+  code,entry=self.automatic([source],mode='mp3',preferred_source_id='preferred',
+      track_policy='prefer_available',track_selection={'audioLanguage':'de','subtitleLanguages':['de']})
+  self.assertEqual(code,0,entry);self.assertEqual(entry['status'],'finished',entry)
+  self.assertEqual(entry['selected_source_type'],'ytdlp')
+  self.assertEqual(entry['download_plan']['subtitleLanguages'],[])
+  self.assertEqual(entry['track_selection']['subtitleLanguages'],['de'])
+  streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',entry['filepath']]))['streams']
+  self.assertEqual({s['codec_type'] for s in streams},{'audio'});self.assertEqual(streams[0]['codec_name'],'mp3')
+  self.assertTrue(any('fallback to next candidate: ytdlp'==line for line in self.logs));self.assertEqual(len(list(self.output.iterdir())),1)
  def test_cancel_stops_planner_without_transfer(self):
   original=worker.resolve_candidates
   def cancel(*args,**kwargs):worker.cancel_requested=True;return original(*args,**kwargs)

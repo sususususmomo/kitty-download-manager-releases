@@ -20,6 +20,7 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT=Path(__file__).resolve().parents[1]
+EQUIVALENCE=os.environ.get('KITTY_TEST_DOWNLOAD_EQUIVALENCE')=='1'
 ITEMS=os.environ.get('KITTY_TEST_MEDIA_ITEMS')=='1'
 TRACKS=os.environ.get('KITTY_TEST_MEDIA_TRACKS')
 CONTEXT=os.environ.get('KITTY_TEST_REQUEST_CONTEXT')=='1'
@@ -28,7 +29,7 @@ DASH=os.environ.get('KITTY_TEST_DASH')=='1'
 DIRECT=os.environ.get('KITTY_TEST_DIRECT')=='1'
 GROUPS=os.environ.get('KITTY_TEST_HLS_GROUPS')=='1'
 AUTOMATIC=os.environ.get('KITTY_TEST_AUTOMATIC')=='1'
-OUTPUT=ROOT/('artifacts/media-tracks-'+TRACKS if TRACKS else 'artifacts/media-items' if ITEMS else 'artifacts/automatic' if AUTOMATIC else 'artifacts/hls-groups' if GROUPS else 'artifacts/direct' if DIRECT else 'artifacts/dash' if DASH else 'artifacts/hls');OUTPUT.mkdir(parents=True,exist_ok=True)
+OUTPUT=ROOT/('artifacts/download-equivalence' if EQUIVALENCE else 'artifacts/media-tracks-'+TRACKS if TRACKS else 'artifacts/media-items' if ITEMS else 'artifacts/automatic' if AUTOMATIC else 'artifacts/hls-groups' if GROUPS else 'artifacts/direct' if DIRECT else 'artifacts/dash' if DASH else 'artifacts/hls');OUTPUT.mkdir(parents=True,exist_ok=True)
 assert sys.platform.startswith('linux'), 'This isolated native-host registration fixture is for Linux.'
 spec=importlib.util.spec_from_file_location('networkfixtures',ROOT/('tests/test-media-item-download.py' if ITEMS else 'tests/test-automatic-download.py' if AUTOMATIC else 'tests/test-hls-group-download.py' if GROUPS else 'tests/test-direct-download.py' if DIRECT else 'tests/test-dash-download.py' if DASH else 'tests/test-hls-download.py'));fixtures=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixtures)
 test=fixtures.MediaItemTests if ITEMS else fixtures.AutomaticTests if AUTOMATIC else fixtures.HlsGroupTests if GROUPS else fixtures.DirectTests if DIRECT else fixtures.DashTests if DASH else fixtures.HlsTests
@@ -36,6 +37,13 @@ if TRACKS:
  spec=importlib.util.spec_from_file_location('trackfixtures',ROOT/'tests/test-media-track-download.py');fixtures=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixtures)
  test=fixtures.HlsTracks if TRACKS=='hls' else fixtures.DashTracks
 test.setUpClass()
+if EQUIVALENCE:
+ subprocess.run(['ffmpeg','-v','error','-i',str(test.media/'vimeo/english/media.m3u8'),'-c','copy',str(test.media/'native.m4a')],check=True,timeout=20)
+ original_response=test.extra_response
+ def equivalence_response(cls,url,headers):
+  if url.split('?')[0]=='/native.m4a':return 200,'audio/mp4',(cls.media/'native.m4a').read_bytes()
+  return original_response(url,headers)
+ test.extra_response=classmethod(equivalence_response)
 report={'checks':[]}
 driver=None
 context_server=None
@@ -104,11 +112,16 @@ window.qa=async function(action,args={}) {
  if(action==='catalogue'){const bg=await browser.runtime.getBackgroundPage();return (await bg.hlsForTab(args.tabId || window.testTab)).map(c=>({id:c.id,type:c.type,metadata:c.metadata,hls:c.hls && {kind:c.hls.kind,maxResolution:c.hls.maxResolution,variants:c.hls.variants.length,audioTracks:c.hls.audioTracks.length,subtitles:c.hls.subtitles.length},variants:c.variants?.length || 1}));}
  if(action==='diagnostics'){const bg=await browser.runtime.getBackgroundPage();return bg.qaHlsDiagnostics(Boolean(args.full));}
  if(action==='sourceurl')return popup()?.document.querySelector('#activeSource [data-open-source]')?.dataset.openSource || '';
+ if(action==='preferences'){const bg=await browser.runtime.getBackgroundPage();return bg.serialDownloadOperation(()=>bg.downloadSettings(window.testTab));}
+ if(action==='pill'){return browser.tabs.sendMessage(window.testTab,{type:'qa-pill-click'});}
+ if(action==='pill-state'){return browser.tabs.sendMessage(window.testTab,{type:'qa-pill-state'});}
+ if(action==='style'){await browser.storage.local.set({pillEnabled:true,pillScope:'all',pillStyle:args.style,uiLanguage:args.language});return true;}
+ if(action==='mode-click'){const v=popup();v.document.querySelector('.modeMenuItem[data-mode="'+args.mode+'"]').click();return true;}
  if(action==='download'){popup().document.getElementById('download').click();return true;}
  if(action==='tracks'){const d=popup()?.document;return {hidden:d?.getElementById('mediaTracks')?.hidden,audio:Array.from(d?.querySelectorAll('#mediaAudioTrack option')||[],e=>({id:e.value,label:e.textContent})),selected:d?.getElementById('mediaAudioTrack')?.value,subtitles:Array.from(d?.querySelectorAll('#mediaTracks input')||[],e=>({id:e.dataset.trackId,checked:e.checked})),selection:popup()?.KittyItemsPopup?.trackSelection(window.testTab)};}
  if(action==='audio-track'){const v=popup(),s=v.document.getElementById('mediaAudioTrack');s.value=args.id||'';s.dispatchEvent(new v.Event('change',{bubbles:true}));return true;}
- if(action==='subtitle-track'){popup().document.querySelector('#mediaTracks input').click();return true;}
- if(action==='mode-change'){const v=popup(),s=v.document.getElementById('mode');s.value=args.mode;s.dispatchEvent(new v.Event('change',{bubbles:true}));return true;}
+ if(action==='subtitle-track'){const c=popup().document.querySelector('#mediaTracks input');if(args.checked===undefined||c.checked!==args.checked)c.click();return true;}
+ if(action==='mode-change'){const v=popup();v.document.querySelector('.modeMenuItem[data-mode="'+args.mode+'"]').click();return true;}
  if(action==='status')return browser.runtime.sendNativeMessage('com.kitty.download_manager',{action:'status'});
  if(action==='context-summary'){const bg=await browser.runtime.getBackgroundPage();const c=(await bg.hlsForTab(window.testTab))[0];return {id:c.id,headers:Object.keys(c.requestContext?.headers||{}),session:Boolean(c.requestContext?.cookies)};}
  if(action==='context-download'){const bg=await browser.runtime.getBackgroundPage();return bg.chosenHls({type:'kitty-download-media',tabId:window.testTab,candidateId:args.id,mode:'best'});}
@@ -120,6 +133,8 @@ window.qa=async function(action,args={}) {
 '''
   # A test-only content listener loads manifests as a browser player would.
   content_js='''browser.runtime.onMessage.addListener(async m=>{
+   if(m.type==="qa-pill-click"){const b=globalThis.qaPillShadow?.getElementById('download');if(!b)throw Error('Pill not mounted');b.click();return true;}
+   if(m.type==="qa-pill-state")return globalThis.qaPillShadow?.getElementById('pill')?.dataset.state || null;
    if(m.type==="qa-scan")return KittyMediaDOM.scan();
   if(m.type==="qa-dom"){if(m.mutate)document.body.insertAdjacentHTML('beforeend',m.html);else document.body.innerHTML=m.html;return true;}
   if(m.type==="qa-clone"){for(const v of document.querySelectorAll('video')){const clone=v.cloneNode();clone.id=v.id+'_placeholder';clone.setAttribute('disabled','');clone.removeAttribute('src');v.replaceWith(clone);}return true;}
@@ -130,7 +145,12 @@ window.qa=async function(action,args={}) {
   xpi=scratch/'test.xpi'
   with zipfile.ZipFile(xpi,'w',zipfile.ZIP_DEFLATED) as z:
    for p in (ROOT/'extension').rglob('*'):
-    if p.is_file() and p.name!='manifest.json':z.write(p,p.relative_to(ROOT/'extension'))
+    if p.is_file() and p.name!='manifest.json':
+     if EQUIVALENCE and p.name=='content-pill.js':
+      # Only expose its closed shadow tree to the QA listener. Event handlers,
+      # dispatch and production settings code remain byte-for-byte unchanged.
+      z.writestr('content-pill.js',p.read_text().replace('shadow = host.attachShadow({ mode: "closed" });','shadow = host.attachShadow({ mode: "closed" }); globalThis.qaPillShadow = shadow;'))
+     else:z.write(p,p.relative_to(ROOT/'extension'))
    manifest=json.loads((ROOT/'extension/manifest.json').read_text());manifest['content_scripts'].append({'matches':['http://127.0.0.1/*'],'js':['qa-content.js'],'run_at':'document_idle'})
    manifest['background']['scripts'].append('qa-background.js')
    z.writestr('qa-background.js','''const qaRequests=[];const qaNative=nativeMessage;nativeMessage=async function(p){const row={action:p.action,url:p.url?new URL(p.url).pathname:null,item:p.media_item?.id};qaRequests.push(row);row.payload=p.action==='download'?JSON.parse(JSON.stringify(p)):null;try{const r=await qaNative(p);row.ok=r?.ok;row.code=r?.code;row.error=r?.error;return r;}catch(e){row.error=String(e);throw e;}};function qaHlsDiagnostics(full=false){return {parser:Boolean(globalThis.KittyHlsParser),reader:hlsReader?.stats,active:hlsReader?.active.size,requests:full?qaRequests:qaRequests.map(({payload,...r})=>r)};}function qaStoredDom(tabId){return Array.from(mediaItems.tabs.get(tabId)?.frames.values()||[]).flatMap(f=>f.items.map(i=>i.domId));}const qaAssociations=[];const qaMediaLog=mediaItems?.log;if(mediaItems)mediaItems.log=(event,data)=>{qaAssociations.push(data);if(qaAssociations.length>1000)qaAssociations.shift();qaMediaLog(event,data);};function qaAssociationLogs(){return qaAssociations;}''')
@@ -205,7 +225,57 @@ window.qa=async function(action,args={}) {
 
 
   value('prepare',mode='1080' if GROUPS else '720');original_tab=value('tab',url=test.base+'/unsupported');time.sleep(.5)
-  if CONTEXT_ONLY:verify_context(None)
+  if EQUIVALENCE:
+   report['pairs']=[]
+   for style in ('minimal','cat','classic'):
+    for language in ('fr','en'):
+     value('close');value('style',style=style,language=language)
+     value('navigate',url=test.base+'/unsupported?'+style+'-'+language);time.sleep(.6)
+     value('dom',html=f'<figure><video controls preload="none" src="{test.track_path}"></video><figcaption>Multilingual player</figcaption></figure>')
+     value('fetch',urls=[test.base+test.track_path]);wait(lambda:len(value('items'))==1)
+     value('open');wait(lambda:len(value('tracks')['audio'])==3)
+     french=next(t['id'] for t in value('tracks')['audio'] if t['label'].startswith('fr'))
+     value('audio-track',id=french);value('subtitle-track',checked=True);value('mode-click',mode='mp3')
+     preference=value('preferences');assert preference['trackPreferences']=={'audioLanguage':'fr','subtitleLanguages':['fr']},preference
+     previous=value('status')['state']['history'][0]['id'] if value('status')['state']['history'] else None
+     value('download');first=wait(lambda:finished(previous));first_streams=streams(first)
+     first_payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
+     assert first_streams[0]['codec_name']=='mp3' and {t['codec_type'] for t in first_streams}=={'audio'},first_streams
+     assert first['download_plan']['audioLanguage']=='fr' and first['download_plan']['subtitleLanguages']==['fr'],first
+     value('native',payload={'action':'clear_history'});value('close');time.sleep(.3)
+     wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill')
+     second=wait(finished);second_streams=streams(second)
+     second_payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
+     assert first_payload==second_payload,{'popup':first_payload,'pill':second_payload}
+     assert second_streams[0]['codec_name']=='mp3' and second['download_plan']['audioLanguage']=='fr',second
+     assert second['download_plan']['subtitleLanguages']==['fr'],second
+     report['pairs'].append({'style':style,'language':language,'requestsIdentical':True,'closedPopup':True,
+        'popupCodec':first_streams[0]['codec_name'],'pillCodec':second_streams[0]['codec_name'],
+        'audioLanguage':second['download_plan']['audioLanguage'],'subtitleLanguages':second['download_plan']['subtitleLanguages']})
+     value('native',payload={'action':'clear_history'})
+   for mode,height in (('720',720),('best',1080)):
+    value('open');wait(lambda:len(value('tracks')['audio'])==3);value('mode-click',mode=mode)
+    value('preferences');value('download');video_popup=wait(finished);video_streams=streams(video_popup)
+    payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
+    assert next(t['height'] for t in video_streams if t['codec_type']=='video')==height,video_streams
+    value('native',payload={'action':'clear_history'});value('close');wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill')
+    video_pill=wait(finished);pill_streams=streams(video_pill)
+    assert next(t['height'] for t in pill_streams if t['codec_type']=='video')==height,pill_streams
+    assert payload==[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
+    report['checks'].append('Popup and pill both produce '+str(height)+'p video with audio and captions for mode '+mode)
+    value('native',payload={'action':'clear_history'})
+   value('open');wait(lambda:len(value('tracks')['audio'])==3);value('mode-click',mode='mp3');value('preferences');value('close')
+   # A new audio-only page has no subtitle options. Preferences survive, and
+   # the native planner adapts the actual tracks before converting to MP3.
+   value('navigate',url=test.base+'/unsupported?audio-only');time.sleep(.6)
+   value('dom',html='<figure><audio controls preload="none" src="/native.m4a"></audio><figcaption>Audio-only song</figcaption></figure>')
+   value('fetch',urls=[test.base+'/native.m4a']);wait(lambda:len(value('items'))==1)
+   wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill');audio_entry=wait(finished);audio_streams=streams(audio_entry)
+   assert audio_streams[0]['codec_name']=='mp3' and {t['codec_type'] for t in audio_streams}=={'audio'},audio_streams
+   assert audio_entry['download_plan']['subtitleLanguages']==[],audio_entry
+   assert value('preferences')['trackPreferences']['subtitleLanguages']==['fr']
+   report['checks'].append('Actual popup controls and closed-popup pill: identical native requests and real MP3/French audio/French captions for every variant and language; audio-only page safely ignores unavailable tracks while retaining preferences')
+  elif CONTEXT_ONLY:verify_context(None)
   elif TRACKS:
    value('prepare',mode='best');value('dom',html=f'<figure><video controls preload="none" src="{test.track_path}"></video><figcaption>Multilingual player</figcaption></figure>')
    value('fetch',urls=[test.base+test.track_path]);wait(lambda:len(value('items'))==1)

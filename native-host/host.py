@@ -79,7 +79,7 @@ DEFAULT_OUTPUT_DIR = default_output_dir()
 DOWNLOADS_DIR = DEFAULT_OUTPUT_DIR.parent
 
 STATE_BACKUP_DIR = CACHE_DIR / "state-backups"
-APP_VERSION = "8.48"
+APP_VERSION = "8.49"
 UPDATE_CACHE_FILE = CACHE_DIR / "update-check.json"
 KITTY_RELEASE_CACHE_FILE = CACHE_DIR / "kitty-release-check.json"
 UPDATE_BACKUP_DIR = CACHE_DIR / "update-backups"
@@ -1842,9 +1842,14 @@ def enqueue_playlist(url, mode, output_dir=None):
     }
 
 
-def enqueue(url, mode, force=False, output_dir=None, media_source=None, hls_fallbacks=None, media_fallbacks=None, automatic=False, media_item=None, track_selection=None):
+def enqueue(url, mode, force=False, output_dir=None, media_source=None, hls_fallbacks=None, media_fallbacks=None, automatic=False, media_item=None, track_selection=None, track_policy="strict", preferred_source_id=None):
     from media_tracks import validate_selection
     tracks = validate_selection(track_selection)
+    if track_policy not in ('strict', 'prefer_available'):
+        raise ValueError('Politique de pistes invalide.')
+    if preferred_source_id is not None and (not isinstance(preferred_source_id, str)
+            or not 1 <= len(preferred_source_id) <= 200 or any(ord(c) < 32 for c in preferred_source_id)):
+        raise ValueError('Préférence de source invalide.')
     if not isinstance(mode, str) or mode not in {"1080", "720", "best", "audio", "mp3", "image"}:
         return {"ok": False, "error": "Format de téléchargement invalide."}
     source = validate_source(media_source) if media_source is not None else None
@@ -1886,6 +1891,10 @@ def enqueue(url, mode, force=False, output_dir=None, media_source=None, hls_fall
         job.update(media_item=item, title=item["title"], thumbnail=item["thumbnail"])
     if tracks:
         job['track_selection'] = tracks
+    if track_policy == 'prefer_available':
+        job['track_policy'] = track_policy
+    if preferred_source_id and any(s.get('id') == preferred_source_id for s in fallbacks):
+        job['preferred_source_id'] = preferred_source_id
     if source:
         job.update(media_source=source, title=source["title"],
                    youtube_auth=youtube_auth_for_url(source["page_url"]))
@@ -1896,7 +1905,7 @@ def enqueue(url, mode, force=False, output_dir=None, media_source=None, hls_fall
         job["media_fallbacks" if media_fallbacks is not None else "hls_fallbacks"] = fallbacks
 
     def same_media(other):
-        if (other.get('track_selection') or {}) != tracks:
+        if (other.get('track_selection') or {}) != tracks or other.get('track_policy', 'strict') != track_policy:
             return False
         if item and other.get("media_item"):
             return other.get("url") == url or (other["media_item"].get("id"), other["media_item"].get("page_url")) == (item["id"], item["page_url"])
@@ -2129,6 +2138,8 @@ def retry_job(job_id):
         automatic=bool(previous.get("automatic")),
         media_item=previous.get("media_item"),
         track_selection=previous.get('track_selection'),
+        track_policy=previous.get('track_policy', 'strict'),
+        preferred_source_id=previous.get('preferred_source_id'),
     )
 
 
@@ -4028,7 +4039,7 @@ def main():
         else:
             repair_state()
             send_message(enqueue(url, mode, force=bool(msg.get("force")),
-                                 media_source=msg.get("media_source"), hls_fallbacks=msg.get("hls_fallbacks"), media_fallbacks=msg.get("media_fallbacks"), automatic=msg.get("automatic", False), media_item=msg.get("media_item"), track_selection=msg.get('track_selection')))
+                                 media_source=msg.get("media_source"), hls_fallbacks=msg.get("hls_fallbacks"), media_fallbacks=msg.get("media_fallbacks"), automatic=msg.get("automatic", False), media_item=msg.get("media_item"), track_selection=msg.get('track_selection'), track_policy=msg.get('track_policy', 'strict'), preferred_source_id=msg.get('preferred_source_id')))
     elif action == "media_item_probe":
         send_message(probe_media_item(msg.get("url"), msg.get("media_item"), msg.get('media_sources')))
     elif action in ("hls_probe", "media_probe"):

@@ -256,7 +256,11 @@
         if(!item.thumbnail)item.thumbnail=resolved?.thumbnail||null;
         if(!item.duration)item.duration=resolved?.duration||null;
         const metadata=item.candidates.find(c=>c.metadata?.title);
-        if(!item.title){item.title=clean(metadata?.metadata?.title)||filename(item.candidates.find(c=>c.url)?.url)||'Média';item.titleSource=metadata?'metadata':'filename';}
+        if(!item.title){
+          const inferred=filename(item.candidates.find(c=>c.url)?.url);
+          item.title=clean(metadata?.metadata?.title)||(/^(?:m[eé]dia|video|audio|stream|index|manifest|master|playlist|watch)$/i.test(inferred)?'':inferred)||'';
+          item.titleSource=item.title?(metadata?'metadata':'filename'):'';
+        }
         if(!item.thumbnail)item.thumbnail=http(metadata?.metadata?.thumbnail);
         item.candidates=item.candidates.map(c=>({...c,title:item.title,maxHeight:c.metadata?.height||c.hls?.maxResolution||null,
           hasVideo:c.type==='direct_audio'?false:c.type==='direct_video'?true:null,hasAudio:c.type==='direct_audio'?true:null,

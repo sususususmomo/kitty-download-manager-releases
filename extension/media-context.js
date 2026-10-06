@@ -18,7 +18,11 @@
     attributeFilter:['src','type','poster','title','aria-label','hidden','srcset','data-src','data-srcset','resource','data-durationhint']});
   watch();
   for(const event of ['loadedmetadata','durationchange','emptied','load'])document.addEventListener(event,schedule,true);
-  browser.runtime.onMessage.addListener(m=>{if(m?.type==='kitty-media-rescan'){previous='';return scan().then(()=>({ok:true}));}});
+  browser.runtime.onMessage.addListener(m=>{
+    if(m?.type==='kitty-media-rescan'||m?.type==='kitty-media-target'){
+      previous='';return scan().then(()=>({ok:true,...(m.type==='kitty-media-target'?{target:KittyMediaDOM.selection()}: {})}));
+    }
+  });
   window.addEventListener('hashchange',schedule);window.addEventListener('popstate',schedule);
   window.addEventListener('pagehide',()=>{observer.disconnect();clearTimeout(timer);timer=0;previous='';browser.runtime.sendMessage({type:'kitty-media-dom',items:[],unload:true}).catch(()=>{});});
   window.addEventListener('pageshow',()=>{watch();schedule();});

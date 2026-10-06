@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import time
 import unittest
 from unittest.mock import patch
@@ -16,6 +17,46 @@ fixture=importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 import host,media_item,queue_store,worker,download_planner,hls
 
 class MediaItemTests(fixture.AutomaticTests):
+ @unittest.skipUnless(shutil.which('node'),'Node is required for the frontend/native round trip')
+ def test_pill_frontend_native_transfer_and_completion(self):
+  root=Path(__file__).resolve().parents[1]
+  script="""
+   const {fixture,player}=require('./tests/test-pill-download.js');
+   (async()=>{const f=fixture(process.argv[1]);
+    f.setItems([player('a',process.argv[2],'First video'),player('b',process.argv[3],'Selected via pill')]);
+    const ui={url:'moz-extension://kitty/popup.html'};
+    const items=(await f.receive({type:'kitty-media-items',tabId:1},ui)).items;
+    await f.receive({type:'kitty-download-settings',tabId:1,change:{itemId:items[1].id}},ui);
+    const r=await f.receive({type:'kitty-add-download'});
+    if(!r.ok)throw new Error(JSON.stringify(r));console.log(JSON.stringify(f.downloads().at(-1)));
+   })().catch(e=>{console.error(e);process.exitCode=1});
+  """
+  payload=json.loads(subprocess.check_output(['node','-e',script,self.base+'/gallery',self.base+'/a_1080p.mp4',self.base+'/b_360p.mp4'],cwd=root,timeout=15))
+  for attr in ('QUEUE_FILE','LOCK_FILE','CONTROL_DIR'):self.stack.enter_context(patch.object(host,attr,getattr(worker,attr)))
+  self.stack.enter_context(patch.object(host,'spawn_active_job',lambda *args:None))
+  self.stack.enter_context(patch.object(host,'get_output_dir',lambda:self.output))
+  self.stack.enter_context(patch.object(host,'WORKER',Path(worker.__file__)))
+  response=host.enqueue(**{key:value for key,value in payload.items() if key not in ('action','client')})
+  self.assertTrue(response['ok'],response)
+  with patch.object(fixture.sys,'argv',['worker.py',response['job_id']]):self.assertEqual(worker.main(),0)
+  state=worker.get_state();entry=state['history'][0]
+  self.assertEqual(entry['status'],'finished');self.assertEqual(entry['title'],'Selected via pill')
+  self.assertEqual(entry['download_plan']['downloadUrls'],[self.base+'/b_360p.mp4']);self.assertEqual(len(self.transfers),1)
+  streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',entry['filepath']],timeout=15))['streams']
+  self.assertEqual(next(s['height'] for s in streams if s['codec_type']=='video'),360)
+  self.assertTrue(any(s['codec_type']=='audio' for s in streams))
+  ui="""
+   const {fixture}=require('./tests/test-pill-ui.js'),fs=require('node:fs');
+   (async()=>{const data=JSON.parse(fs.readFileSync(0,'utf8')),f=await fixture('cat','fr',process.argv[1]);
+    f.player('video',process.argv[2]);
+    f.setHandler(async m=>m.type==='kitty-add-download'?data.response:{ok:true,state:data.state});
+    f.nodes.get('download').dispatch('click');await new Promise(r=>setImmediate(r));await f.poll();
+    if(f.nodes.get('pill').dataset.state!=='finished')throw new Error('Native completion not reflected in pill');
+    console.log('Native completion reflected in pill');
+   })().catch(e=>{console.error(e);process.exitCode=1});
+  """
+  completed=subprocess.run(['node','-e',ui,self.base+'/gallery',self.base+'/b_360p.mp4'],cwd=root,input=json.dumps({'response':response,'state':state}),text=True,capture_output=True,timeout=15)
+  self.assertEqual(completed.returncode,0,completed.stdout+completed.stderr)
  @classmethod
  def setUpClass(cls):
   super().setUpClass()
@@ -67,8 +108,8 @@ class MediaItemTests(fixture.AutomaticTests):
   self.assertIn('Actual song title',Path(entry['filepath']).name)
   streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',entry['filepath']]))['streams']
   self.assertEqual({s['codec_type'] for s in streams},{'audio'})
- def run_item(self,sources,url='/wiki/File:Film_A.webm',item=None,mode='best'):
-  active=dict(id='fixture',url=self.base+url,source_page_url=self.base+'/gallery',mode=mode,output_dir=str(self.output),status='starting',started_at=time.time(),youtube_auth=False,automatic=True,media_item=item or self.item(),media_fallbacks=sources)
+ def run_item(self,sources,url='/wiki/File:Film_A.webm',item=None,mode='best',**preferences):
+  active=dict(id='fixture',url=self.base+url,source_page_url=self.base+'/gallery',mode=mode,output_dir=str(self.output),status='starting',started_at=time.time(),youtube_auth=False,automatic=True,media_item=item or self.item(),media_fallbacks=sources,**preferences)
   queue_store.atomic_json(worker.QUEUE_FILE,{**queue_store.default_state(),'active':active})
   with patch.object(fixture.sys,'argv',['worker.py','fixture']):self.assertEqual(worker.main(),0)
   entry=worker.get_state()['history'][0];self.assertEqual(entry['status'],'finished',entry)
@@ -99,6 +140,15 @@ class MediaItemTests(fixture.AutomaticTests):
   entry,streams=self.run_item([],url='/file-b',item=item)
   self.assertEqual(entry['download_plan']['sourceUrl'],self.base+'/file-b');self.assertEqual(entry['download_plan']['downloadUrls'],[self.base+'/b_360p.mp4'])
   self.assertEqual(next(s['height'] for s in streams if s['codec_type']=='video'),360)
+ def test_common_request_failed_network_uses_only_selected_file_extractor(self):
+  item={**self.item('Caption B'),'id':'item:fixture:b'}
+  entry,streams=self.run_item([self.candidate_source('direct_video','/missing.mp4','/gallery')],
+      url='/file-b',item=item,track_policy='prefer_available',track_selection={'subtitleLanguages':['de']})
+  self.assertEqual(entry['download_plan']['sourceType'],'ytdlp')
+  self.assertEqual(entry['download_plan']['downloadUrls'],[self.base+'/b_360p.mp4'])
+  self.assertEqual(next(s['height'] for s in streams if s['codec_type']=='video'),360)
+  self.assertEqual(entry['download_plan']['subtitleLanguages'],[])
+  self.assertEqual(len(self.transfers),1)
  def test_item_hls_plan_uses_existing_downloader(self):
   entry,streams=self.run_item([self.candidate_source('hls','/master.m3u8','/gallery')])
   self.assertEqual(entry['download_plan']['sourceType'],'hls');self.assertEqual(next(s['height'] for s in streams if s['codec_type']=='video'),1080)

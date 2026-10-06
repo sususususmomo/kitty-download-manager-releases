@@ -14,7 +14,7 @@ NM_FILE="$NM_DIR/com.kitty.download_manager.json"
 export PYTHONDONTWRITEBYTECODE=1
 
 echo
-echo "Kitty Download Manager V8.48"
+echo "Kitty Download Manager V8.49"
 echo "Préparation de l'installation / migration…"
 
 # Une V8 déjà installée passe par l'updater sûr : pause de file, arrêt externe
@@ -102,7 +102,7 @@ MIGRATION_RESULT="$(cat "$FINALIZE_RESULT")"
 rm -f "$FINALIZE_RESULT"
 
 echo
-echo "Kitty Download Manager V8.48 installée."
+echo "Kitty Download Manager V8.49 installée."
 echo "Host       : $INSTALL_DIR/host.py"
 echo "Worker     : $INSTALL_DIR/worker.py"
 echo "Métadonnées: $INSTALL_DIR/metadata.py"

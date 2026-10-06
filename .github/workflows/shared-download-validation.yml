@@ -1,0 +1,58 @@
+name: Shared popup and pill download validation
+on:
+  push:
+    branches: ['codex/shared-download-*']
+  workflow_dispatch:
+jobs:
+  firefox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: |
+          python -m pip install selenium 'yt-dlp[default]' psutil mutagen
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          curl -fL 'https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US' | tar -xJ -C "$RUNNER_TEMP"
+          curl -fsSL https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz | tar -xz -C "$RUNNER_TEMP"
+      - run: |
+          KITTY_FIREFOX_BINARY="$RUNNER_TEMP/firefox/firefox" KITTY_GECKODRIVER="$RUNNER_TEMP/geckodriver" KITTY_TEST_MEDIA_TRACKS=hls KITTY_TEST_DOWNLOAD_EQUIVALENCE=1 python tests/test-hls-firefox.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: shared-download-firefox
+          path: artifacts/download-equivalence/
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: python -m pip install 'yt-dlp[default]' psutil mutagen
+      - name: Install FFmpeg for actual media verification
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          'C:\ProgramData\chocolatey\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - run: |
+          node tests/test-pill-download.js
+          node tests/test-pill-ui.js
+          node tests/test-popup-tracks.js
+          python tests/test-windows-port.py
+          python tests/test-media-tracks.py
+          python tests/test-media-track-download.py
+          python tests/test-media-item-download.py
+          python tests/test-automatic-download.py
+          python tests/test-backend-packaging.py

@@ -1,6 +1,21 @@
 (() => {
   const NATIVE_PROTOCOL_VERSION = 1;
 
+  const LOADING_DOTS_CSS = `
+    .kittyLoadingDots {display:inline-flex;align-items:center;gap:3px;min-height:12px;white-space:nowrap;}
+    .kittyLoadingDot {animation:kittyLoadingPulse 1s ease-in-out infinite;}
+    .kittyLoadingDot:nth-child(2) {animation-delay:.15s;}
+    .kittyLoadingDot:nth-child(3) {animation-delay:.3s;}
+    @keyframes kittyLoadingPulse {0%,80%,100% {opacity:.3;transform:translateY(0);}40% {opacity:1;transform:translateY(-2px);}}
+    @media (prefers-reduced-motion:reduce) {.kittyLoadingDot {animation:none;}}
+  `;
+  function loadingDotsElement(label) {
+    const dots=document.createElement('span');dots.className='kittyLoadingDots';
+    dots.setAttribute('role','status');dots.setAttribute('aria-label',label);dots.title=label;
+    for(let i=0;i<3;i++) {const dot=document.createElement('span');dot.className='kittyLoadingDot';dot.textContent='•';dot.setAttribute('aria-hidden','true');dots.append(dot);}
+    return dots;
+  }
+
   const COLORS = Object.freeze({
     blue: "#2A62BB",
     blueHover: "#3471D4",
@@ -279,6 +294,8 @@
 
   globalThis.KittyShared = Object.freeze({
     NATIVE_PROTOCOL_VERSION,
+    LOADING_DOTS_CSS,
+    loadingDotsElement,
     COLORS,
     STATE_UI,
     modeLabel,
@@ -294,6 +311,10 @@
     supportsMediaItems:comp=>{
       const parts=String(comp?.backend_version || '').split('.').map(Number);
       return Boolean(comp?.compatible && parts.length>=2 && parts.every(Number.isFinite) && (parts[0]>8 || parts[0]===8&&parts[1]>=39));
+    },
+    supportsAdaptiveTracks:comp=>{
+      const parts=String(comp?.backend_version || '').split('.').map(Number);
+      return Boolean(comp?.compatible && parts.length>=2 && parts.every(Number.isFinite) && (parts[0]>8 || parts[0]===8&&parts[1]>=49));
     },
     supportsMediaTracks:comp=>{
       const parts=String(comp?.backend_version || '').split('.').map(Number);

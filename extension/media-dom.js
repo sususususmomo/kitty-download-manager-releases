@@ -61,5 +61,34 @@
     }
     return result.slice(0,100);
   }
-  globalThis.KittyMediaDOM=Object.freeze({scan,embed,url});
+  function selection(doc=document) {
+    const known=new Set(scan(doc).map(item=>item.domId));
+    const view=doc.defaultView;let best=null,bestScore=-Infinity;
+    for(const el of doc.querySelectorAll('video,audio,iframe,object,embed')) {
+      if(!known.has(ids.get(el)))continue;
+      const style=view?.getComputedStyle(el);
+      if(style&&(style.display==='none'||style.visibility==='hidden'||style.visibility==='collapse'||style.opacity==='0'))continue;
+      const rect=el.getBoundingClientRect(),width=view?.innerWidth||0,height=view?.innerHeight||0;
+      const area=Math.max(0,Math.min(rect.right,width)-Math.max(rect.left,0))*Math.max(0,Math.min(rect.bottom,height)-Math.max(rect.top,0));
+      const playing=['VIDEO','AUDIO'].includes(el.tagName)&&el.paused===false&&!el.ended;
+      if(!area&&!(el.tagName==='AUDIO'&&playing))continue;
+      const score=(playing?200:0)+(area?100*area/Math.max(1,rect.width*rect.height)-28*Math.abs((rect.top+rect.bottom)/2-height/2)/Math.max(1,height):0);
+      if(score>bestScore){bestScore=score;best=el;}
+    }
+    if(best)return {domId:ids.get(best)};
+    // A generic cross-origin iframe is not itself a MediaItem. Ask its own
+    // content script to identify the player instead of guessing a page URL.
+    for(const el of doc.querySelectorAll('iframe')) {
+      const frameUrl=url(el.getAttribute('src'),doc.baseURI);if(!frameUrl)continue;
+      const style=view?.getComputedStyle(el),rect=el.getBoundingClientRect();
+      if(style&&(style.display==='none'||style.visibility==='hidden'||style.opacity==='0'))continue;
+      const width=view?.innerWidth||0,height=view?.innerHeight||0;
+      const area=Math.max(0,Math.min(rect.right,width)-Math.max(rect.left,0))*Math.max(0,Math.min(rect.bottom,height)-Math.max(rect.top,0));
+      if(!area)continue;
+      const score=100*area/Math.max(1,rect.width*rect.height)-28*Math.abs((rect.top+rect.bottom)/2-height/2)/Math.max(1,height);
+      if(score>bestScore){bestScore=score;best={frameUrl};}
+    }
+    return best;
+  }
+  globalThis.KittyMediaDOM=Object.freeze({scan,selection,embed,url});
 })();

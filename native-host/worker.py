@@ -929,7 +929,7 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
 def main():
     global current_job_id
 
-    log(f"worker V8.48 lancé pid={os.getpid()} argv={sys.argv[1:]}")
+    log(f"worker V8.49 lancé pid={os.getpid()} argv={sys.argv[1:]}")
     if len(sys.argv) != 2:
         return 2
 
@@ -1076,6 +1076,11 @@ def main():
         if active.get('automatic') and not selected_source and mode != 'image':
             update_active(resolver_status='finding')
             candidates = resolve_candidates(opts, active, check_download_control, log)
+            mode = active.pop('_effective_mode', mode)
+            if mode != active['mode']:
+                update_active(effective_mode=mode)
+                opts = build_opts(mode, progress_hook, output_dir, job_cookiefile)
+                opts['writethumbnail'] = False
         for attempt, candidate in enumerate(candidates):
             item_plan = None
             attempt_bytes = 0
@@ -1109,7 +1114,7 @@ def main():
                     if mode != 'image' and (active.get('media_item') or active.get('track_selection') or mode in ('audio', 'mp3')):
                         if candidate is None:
                             candidate = candidate_from_info(info, selected_source, active, DownloadRequest.from_mode(mode))
-                        item_plan = build_item_plan(candidate, active, opts, [c for c in candidates if c is not None] or [candidate])
+                        item_plan = build_item_plan(candidate, {**active, 'mode':mode}, opts, [c for c in candidates if c is not None] or [candidate])
                         info = item_plan.preparedInfo
                         if active.get('media_item'):
                             owned = getattr(candidate, '_track_cohort', None) or [candidate]

@@ -19,11 +19,11 @@ import host,worker,queue_store,hls
 from request_context import youtube_dl
 
 class TransferMixin:
-    def run_tracks(self,mode='best',selection=None,page=False):
+    def run_tracks(self,mode='best',selection=None,page=False,policy='strict'):
         source=self.source(self.track_path)
         active=dict(id='fixture',url=self.base+'/page' if page else source['url'],mode=mode,
             output_dir=str(self.output),status='starting',started_at=time.time(),youtube_auth=False,
-            track_selection=selection or {},automatic=not page,
+            track_selection=selection or {},track_policy=policy,automatic=not page,
             source_page_url=self.base+'/page',media_item={'id':'item:tracks','title':'Track fixture','page_url':self.base+'/page'})
         active['media_fallbacks']=[{**source,'id':'tracks-source','media_item_id':'item:tracks'}]
         queue_store.atomic_json(worker.QUEUE_FILE,{**queue_store.default_state(),'active':active})
@@ -38,6 +38,22 @@ class TransferMixin:
         self.assertEqual(code,0,entry);self.assertEqual(entry['status'],'finished',entry)
         streams=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-of','json',entry['filepath']]))['streams']
         return entry,streams
+    def track_missing_preferences_keep_available_caption_and_audio(self):
+        entry,streams=self.run_tracks(selection={'audioLanguage':'de','subtitleLanguages':['de','fr'],
+            'subtitleTrackIds':['track:from-another-site']},policy='prefer_available')
+        self.assertEqual(entry['download_plan']['audioLanguage'],'en')
+        self.assertEqual(entry['download_plan']['subtitleLanguages'],['fr'])
+        self.assertEqual(next(s['height'] for s in streams if s['codec_type']=='video'),1080)
+        self.assertTrue(list(self.output.glob('*.fr.vtt')))
+        self.assertEqual(entry['track_selection']['subtitleLanguages'],['de','fr'])
+    def track_missing_captions_mp3_remains_mp3(self):
+        entry,streams=self.run_tracks(mode='mp3',selection={'audioLanguage':'de','subtitleLanguages':['de']},policy='prefer_available')
+        self.assertEqual({s['codec_type'] for s in streams},{'audio'})
+        self.assertEqual(streams[0]['codec_name'],'mp3')
+        self.assertEqual(entry['download_plan']['audioLanguage'],'en')
+        self.assertEqual(entry['download_plan']['subtitleLanguages'],[])
+        self.assertFalse(list(self.output.glob('*.vtt')))
+        self.assertEqual(entry['track_selection']['subtitleLanguages'],['de'])
     def track_language_video_subtitles(self):
         entry,streams=self.run_tracks(selection={'audioLanguage':'fr','subtitleLanguages':['fr']})
         self.assertEqual(entry['download_plan']['audioLanguage'],'fr')
@@ -83,13 +99,14 @@ class TransferMixin:
         for index,lang in enumerate(('fr','en')):
             source={**self.source(self.track_path),'media_item_id':f'item:{index}'}
             result=host.enqueue(source['url'],'audio',automatic=True,media_fallbacks=[source],
-                media_item={'id':f'item:{index}','title':f'Track {index}','page_url':source['page_url']},track_selection={'audioLanguage':lang})
+                media_item={'id':f'item:{index}','title':f'Track {index}','page_url':source['page_url']},track_selection={'audioLanguage':lang},track_policy='prefer_available')
             self.assertTrue(result['ok'],result)
         state=host.snapshot();self.assertEqual([j['track_selection']['audioLanguage'] for j in state['queue']],['fr','en'])
         previous={**state['queue'][0],'status':'error'};state['history']=[previous];state['queue']=[]
         queue_store.atomic_json(worker.QUEUE_FILE,state)
         self.assertTrue(host.retry_job(previous['id'])['ok'])
         self.assertEqual(host.snapshot()['queue'][0]['track_selection'],{'audioLanguage':'fr'})
+        self.assertEqual(host.snapshot()['queue'][0]['track_policy'],'prefer_available')
 
 class HlsTracks(TransferMixin,hls_fixture.HlsGroupTests):
     track_path='/vimeo/tracks.m3u8'

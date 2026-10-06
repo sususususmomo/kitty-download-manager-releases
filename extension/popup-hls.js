@@ -1,6 +1,6 @@
 /* Small source selector; the existing Kitty quality/menu and queue remain shared. */
 (() => {
-  let activeTab = null, candidates = [], automatic = false, refreshGeneration = 0, probeGeneration = 0, translate = value => value, onSelect = () => {};
+  let activeTab = null, activePage = null, candidates = [], automatic = false, refreshGeneration = 0, probeGeneration = 0, translate = value => value, onSelect = () => {};
   const panel = () => document.getElementById('hlsPanel');
   const select = () => document.getElementById('hlsSource');
   const detail = () => document.getElementById('hlsDetail');
@@ -30,8 +30,10 @@
       const [tab] = await browser.tabs.query({active:true,currentWindow:true});
       const result = tab ? await browser.runtime.sendMessage({type:'kitty-media-list',tabId:tab.id}) : null;
       if (turn !== refreshGeneration) return;
-      const previous = activeTab === tab?.id ? select().value : '';
-      activeTab = tab?.id ?? null;
+      const saved=await browser.runtime.sendMessage({type:'kitty-download-settings',tabId:tab.id});
+      if(turn!==refreshGeneration)return;
+      const previous = activeTab === tab?.id && activePage === tab?.url ? select().value : saved?.candidateId || ''; 
+      activeTab = tab?.id ?? null;activePage=tab?.url||null;
       candidates = result?.ok ? result.candidates : [];
       automatic = Boolean(result?.automatic_available);
       select().replaceChildren();
@@ -49,7 +51,7 @@
   async function probe() {
     const candidateId=select().value, tabId=activeTab;
     const turn=++probeGeneration;
-    if(!candidateId){idle();return;}
+    if(!candidateId){onSelect(null);idle();return;}
     const candidate=candidates.find(c=>c.id===candidateId);
     onSelect(candidate);
     if(candidate?.hls?.protected){text('Flux HLS protégé / DRM');return;}
@@ -68,7 +70,10 @@
     translate=options.translate || translate;
     onSelect=options.onSelect || onSelect;
     if(!panel())return;
-    select().addEventListener('change',probe);
+    select().addEventListener('change',()=>{
+      browser.runtime.sendMessage({type:'kitty-download-settings',tabId:activeTab,change:{candidateId:select().value||null}}).catch(()=>{});
+      probe();
+    });
     browser.runtime.onMessage.addListener(m=>{if(m?.type==='kitty-hls-changed' && (activeTab===null || m.tabId===activeTab))refresh();});
     browser.tabs.onActivated?.addListener(refresh);
     browser.tabs.onUpdated?.addListener((id,c)=>{if(id===activeTab&&c.url)refresh();});

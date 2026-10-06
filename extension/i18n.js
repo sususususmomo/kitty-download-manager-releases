@@ -2,6 +2,7 @@
   const VALID_LANGUAGES = new Set(["fr", "en"]);
   const FR_EN = Object.freeze(
 {
+  "Ces préférences nécessitent Kitty Backend v8.49 ou plus récent. Lance la mise à jour du backend.": "These preferences require Kitty Backend v8.49 or newer. Update the backend.",
   "Audio uniquement": "Audio only",
   "Vidéo uniquement": "Video only",
   "Sous-titres": "Subtitles",

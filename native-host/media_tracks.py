@@ -162,7 +162,29 @@ def choose_tracks(tracks, selection):
     return selected_audio, subtitles
 
 
-def compose_info(candidate, cohort, selection, mode):
+def available_selection(tracks, selection):
+    """Adapt preferences without changing the saved request or strict API.
+
+    One unavailable subtitle must not remove another available language. Opaque
+    IDs never migrate to a different source; languages can match locales.
+    """
+    clean = validate_selection(selection)
+    audio = tracks['audioTracks']
+    if clean.get('audioTrackId') and not any(t['id'] == clean['audioTrackId'] for t in audio):
+        clean.pop('audioTrackId')
+    if clean.get('audioLanguage') and not any(language_matches(t['language'], clean['audioLanguage']) for t in audio):
+        clean.pop('audioLanguage')
+    for key, attribute in (('subtitleTrackIds', 'id'), ('subtitleLanguages', 'language')):
+        if key in clean:
+            clean[key] = [value for value in clean[key] if any(
+                language_matches(t[attribute], value) if attribute == 'language' else t[attribute] == value
+                for t in tracks['subtitleTracks'])]
+            if not clean[key]:
+                clean.pop(key)
+    return clean
+
+
+def compose_info(candidate, cohort, selection, mode, adapt=False):
     """Choose only among sources already scoped to this item by the resolver.
 
     An explicit audio choice may be a separate candidate. Its native formats
@@ -171,6 +193,8 @@ def compose_info(candidate, cohort, selection, mode):
     selection = validate_selection(selection)
     catalogues = [(c, catalogue(c.info, source_id(c.source), c.sourceType)) for c in cohort]
     tracks = {kind: [t for _, catalogue_ in catalogues for t in catalogue_[kind]] for kind in KINDS}
+    if adapt:
+        selection = available_selection(tracks, selection)
     explicit_audio = bool(selection.get('audioTrackId') or selection.get('audioLanguage'))
     if explicit_audio:
         audio, subtitles = choose_tracks(tracks, selection)

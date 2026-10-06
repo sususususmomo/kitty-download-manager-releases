@@ -1487,7 +1487,8 @@
     .mediaInfo {display:flex;flex-direction:column;min-width:0;gap:3px;}
     .mediaTitle {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
     .mediaInfo small {color:var(--muted);font-size:10px;}
-    .mediaToolbar {display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:6px;font-size:10px;}
+    .mediaToolbar {display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-top:8px;gap:6px;font-size:10px;}
+    .mediaSelectionActions {display:flex;gap:6px;flex-shrink:0;}
     .mediaToolbar button {font-size:10px;padding:4px 6px;}
     .mediaBatch {width:100%;margin-top:6px;padding:6px;font-size:11px;}
     .mediaTracks {margin-top:8px;display:grid;gap:5px;}
@@ -1567,7 +1568,13 @@
     <div id="mediaTracks" class="mediaTracks" hidden></div>
     <button id="mediaCount" class="ghost mediaCount" type="button" aria-expanded="false" aria-controls="mediaDrawer" hidden></button>
     <div id="mediaDrawer" hidden>
-      <div class="mediaToolbar"><span>Automatique · meilleure source</span><button id="mediaSelectAll" class="ghost" type="button">Tout sélectionner</button></div>
+      <div class="mediaToolbar">
+        <span>Automatique · meilleure source</span>
+        <div class="mediaSelectionActions">
+          <button id="mediaSelectAll" class="ghost" type="button">Tout sélectionner</button>
+          <button id="mediaDeselectAll" class="ghost" type="button" disabled>Tout désélectionner</button>
+        </div>
+      </div>
       <div id="mediaRows" class="mediaRows"></div>
       <button id="mediaBatch" class="ghost mediaBatch" type="button" disabled>Ajouter la sélection</button>
     </div>

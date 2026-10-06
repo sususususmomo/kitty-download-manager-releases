@@ -1,4 +1,8 @@
 <p align="center">
+
+Current version: **extension 8.57 / backend 8.49**. Popup and pill share one download operation, retain mode/quality/format and track preferences, and adapt unavailable options to Automatic. Install the included backend 8.49 as well as the extension, then reload open media pages. See [implementation and validation](docs/PILL-V8.57.md).
+
+Version actuelle : **extension 8.57 / backend 8.49**. La popup et la pill utilisent la même opération, conservent qualité, format et préférences de pistes, et adaptent les options absentes à Automatique. Installez aussi le backend 8.49 inclus, puis rechargez les pages ouvertes. Voir [les changements et la validation](docs/PILL-V8.57.md).
   <img src="extension/icons/icon-128.png" width="88" alt="Kitty logo">
 </p>
 
@@ -42,6 +46,10 @@ Frontend **8.50** / backend **8.41** renews expired media URLs inside the existi
 
 Frontend **8.52** / backend **8.46** adds shared video/audio/subtitle tracks to MediaItems. Automatic binds the best video to the requested audio language and optional captions, using only that item's candidates. Audio original prefers native audio without downloading video; direct containers support embedded audio selection by stream copy. Track controls appear only when useful and batch jobs keep independent preferences. See [model, tests and limits](docs/MEDIA-TRACKS-V8.51.md).
 
+Frontend **8.55** keeps **Select all** and **Deselect all** side by side in the detected-media chooser. Deselect all clears a partial selection directly. Reload the updated extension to use these controls; no backend installation is needed.
+
+Frontend **8.56** connects pill downloads to the targeted player and its own sources, including embedded players. Unknown media titles and pill metadata loading use three animated dots. Reload the extension and already-open pages. See [pill fixes and validation](docs/PILL-V8.56.md).
+
 ### License
 
 Kitty Download Manager is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`). Third-party dependencies retain their own licenses; see [Third-party notices](THIRD-PARTY-NOTICES.md).
@@ -72,6 +80,10 @@ Les sources en développement détectent les flux HLS, DASH et les fichiers vid�
 
 Frontend **8.52** / backend **8.46** représente les pistes vidéo/audio/sous-titres de chaque MediaItem. Automatic associe la meilleure vidéo à la langue audio et aux sous-titres demandés. Le mode audio original privilégie un flux natif sans téléchargement vidéo inutile; les pistes intégrées des fichiers directs sont sélectionnées par copie. Les contrôles restent compacts et les préférences du batch sont propres à chaque média. Voir [le modèle, les tests et les limites](docs/MEDIA-TRACKS-V8.51.md).
 
+Le frontend **8.55** affiche **Tout sélectionner** et **Tout désélectionner** côte à côte dans la liste des médias détectés. Tout désélectionner vide directement une sélection partielle. Rechargez l’extension mise à jour pour utiliser ces boutons ; aucune installation du backend n’est nécessaire.
+
+Le frontend **8.56** relie les téléchargements de la pill au lecteur ciblé et à ses propres sources, y compris les lecteurs intégrés. Trois points animés remplacent les titres génériques en attente et signalent le chargement dans la pill. Rechargez l’extension et les pages déjà ouvertes. Voir [les corrections et leur validation](docs/PILL-V8.56.md).
+
 ### Licence
 
 Kitty Download Manager est distribué sous la [licence publique générale GNU v3.0](LICENSE) (`GPL-3.0-only`). Les dépendances tierces conservent leurs propres licences ; voir les [notices des composants tiers](THIRD-PARTY-NOTICES.md).
@@ -98,6 +110,6 @@ The installer checks YouTube and postprocessor imports, the private package path
 
 ## Windows audit (backend 8.48 / frontend 8.54)
 
-Private psutil API/integrity validation, safer process checks, serialized settings/session changes, bounded Windows sharing retries, percent-sign output paths and persistent session UI errors. Local tests passed; dedicated native Windows CI is prepared and awaits authorization to send the test commit. See [the audit and validation limits](docs/WINDOWS-AUDIT-V8.48.md).
+Private psutil API/integrity validation, safer process checks, serialized settings/session changes, bounded Windows sharing retries, percent-sign output paths and persistent session UI errors. Local regression and dedicated native Windows Server 2022/2025 CI passed, including real Firefox and bidirectional Native Messaging scenarios. See [the audit and validation limits](docs/WINDOWS-AUDIT-V8.48.md).
 
-Contrôle de l’API et de l’intégrité de psutil, vérification des processus sans fausse disparition, réglages/sessions simultanés protégés, conflits de partage Windows gérés, chemins avec `%` et erreurs de popup persistantes. Les tests locaux ont réussi ; la CI Windows dédiée attend l’autorisation d’envoyer le commit de test. Voir [l’audit et ses limites](docs/WINDOWS-AUDIT-V8.48.md).
+Contrôle de l’API et de l’intégrité de psutil, vérification des processus sans fausse disparition, réglages/sessions simultanés protégés, conflits de partage Windows gérés, chemins avec `%` et erreurs de popup persistantes. Les tests locaux et la CI Windows Server 2022/2025 ont réussi, y compris Firefox réel et les échanges Native Messaging aller-retour. Voir [l’audit et ses limites](docs/WINDOWS-AUDIT-V8.48.md).

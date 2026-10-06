@@ -35,6 +35,7 @@
   let currentStateKind = "idle";
   let currentStateText = "Download";
   let suppressNextDownloadClick = false;
+  let downloadPending = false;
 
   function isMediaSite() {
     const hostname = location.hostname.replace(/^www\./, "").toLowerCase();
@@ -134,7 +135,8 @@
     currentStateKind = kind;
     currentStateText = text;
     pill.dataset.state = kind;
-    statusText.textContent = I18N.tr(text);
+    if(kind==='metadata')statusText.replaceChildren(KittyShared.loadingDotsElement(I18N.tr(text || 'Récupération des métadonnées')));
+    else statusText.textContent = I18N.tr(text);
     mascot.textContent = "ᓚᘏᗢ";
 
     const visual = {
@@ -149,6 +151,7 @@
     }[kind] || { icon: "↓", title: text || "Télécharger", disabled: false };
 
     downloadButton.textContent = currentVariant === "cat" ? "ᓚᘏᗢ" : visual.icon;
+    if(kind==='metadata'&&currentVariant!=='classic')downloadButton.replaceChildren(KittyShared.loadingDotsElement(I18N.tr(visual.title)));
     downloadButton.dataset.actionDisabled = visual.disabled ? "true" : "false";
     downloadButton.disabled = currentVariant === "classic" && visual.disabled;
     downloadButton.setAttribute("aria-disabled", visual.disabled ? "true" : "false");
@@ -197,13 +200,13 @@
 
     const currentUrl = comparableMediaUrl(resolved.url);
 
-    if (comparableMediaUrl(state.active?.media_source?.page_url || state.active?.url) === currentUrl) {
+    if (comparableMediaUrl(state.active?.media_item?.page_url || state.active?.media_source?.page_url || state.active?.url) === currentUrl) {
       trackedJobId = state.active.id;
       return;
     }
 
     const queue = Array.isArray(state.queue) ? state.queue : [];
-    const matching = queue.find(job => comparableMediaUrl(job?.media_source?.page_url || job?.url) === currentUrl);
+    const matching = queue.find(job => comparableMediaUrl(job?.media_item?.page_url || job?.media_source?.page_url || job?.url) === currentUrl);
     if (matching) trackedJobId = matching.id;
   }
 
@@ -217,6 +220,7 @@
 
     try {
       const response = await browser.runtime.sendMessage({ type: "kitty-pill-status" });
+      if(downloadPending){scheduleNextPoll(900);return;}
       if (!response?.ok) {
         scheduleNextPoll(nextDelay);
         return;
@@ -306,34 +310,23 @@
   }
 
   async function triggerDownload() {
-    if (downloadButton.dataset.actionDisabled === "true") return;
+    if (downloadPending || downloadButton.dataset.actionDisabled === "true") return;
 
-    const resolved = resolveMediaUrlForPage(true);
-    if (!resolved.ok || !resolved.url) {
-      duplicatePending = false;
-      trackedJobId = null;
-      setVisualState("error", "Vidéo non détectée");
-      downloadButton.title = I18N.tr(resolved.error || "Impossible de détecter la vidéo.");
-      resetToIdleSoon(2600);
-      return;
-    }
-
-    const downloadUrl = resolved.url;
-    const force = Boolean(
-      duplicatePending && comparableMediaUrl(duplicatePending.url) === comparableMediaUrl(downloadUrl)
-    );
+    const downloadUrl=location.href;
+    const force=Boolean(duplicatePending);
+    downloadPending = true;
+    clearPollTimer();
     setVisualState("metadata", force ? "Relance…" : "Ajout…");
 
     try {
       const response = await browser.runtime.sendMessage({
-        type: "kitty-pill-download",
-        url: downloadUrl,
-        force
+        type: "kitty-add-download",
+        forceToken:duplicatePending?.requestKey
       });
 
       if (!response?.ok) {
         if (response?.code === "already_downloaded") {
-          duplicatePending = { url: downloadUrl };
+          duplicatePending = { url: downloadUrl, requestKey:response.requestKey };
           trackedJobId = null;
           setVisualState("duplicate", "Déjà téléchargé");
           return;
@@ -341,7 +334,7 @@
 
         if (response?.code === "already_active" || response?.code === "already_queued") {
           duplicatePending = false;
-          trackedJobId = response.job_id || null;
+          trackedJobId = response.job_id || response.first_job_id || null;
           scheduleNextPoll(100);
           return;
         }
@@ -350,7 +343,7 @@
       }
 
       duplicatePending = false;
-      trackedJobId = response.job_id || null;
+      trackedJobId = response.job_id || response.first_job_id || null;
       setVisualState("metadata", "Métadonnées…");
       scheduleNextPoll(100);
     } catch (error) {
@@ -359,6 +352,9 @@
       setVisualState("error", error?.message || "Erreur");
       downloadButton.title = I18N.tr(error?.message || "Erreur");
       resetToIdleSoon(2200);
+    } finally {
+      downloadPending = false;
+      if(!pollTimer)scheduleNextPoll(trackedJobId ? 100 : 15000);
     }
   }
 
@@ -712,6 +708,7 @@
         animation: kittyBob .7s ease-in-out infinite alternate;
       }
 
+      ${KittyShared.LOADING_DOTS_CSS}
       @media (prefers-reduced-motion: reduce) {
         #pill, #mascot, #download { animation: none !important; transition: none !important; }
       }

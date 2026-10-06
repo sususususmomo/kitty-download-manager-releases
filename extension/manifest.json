@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Kitty Download Manager",
-  "version": "8.54",
-  "description": "Gestionnaire de t\u00e9l\u00e9chargements multim\u00e9dia persistant bas\u00e9 sur yt-dlp.",
+  "version": "8.57",
+  "description": "Gestionnaire de téléchargements multimédia persistant basé sur yt-dlp.",
   "permissions": [
     "activeTab",
     "menus",

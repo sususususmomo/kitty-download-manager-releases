@@ -1,9 +1,31 @@
 /* Compact logical-media chooser; batches enqueue through the existing pipeline. */
 (() => {
-  let tabId=null,items=[],current=null,checked=new Set(),generation=0,signature='',translate=x=>x,onSelect=()=>{},onBatch=()=>{},opened=false,probed=new Set(),batchBusy=false;
+  let tabId=null,items=[],current=null,checked=new Set(),generation=0,signature='',translate=x=>x,onSelect=()=>{},onBatch=()=>{},opened=false,probed=new Map(),batchBusy=false;
   const el=id=>document.getElementById(id);
   const preferences=new Map();
-  function trackSelection(id,itemId=current){return id===tabId?{...(preferences.get(itemId)||{})}:{};}
+  const titleFailures=new Set();
+  let portablePreferences={},pageUrl=null;
+  function remember(itemId,preference) {
+    const change={itemId,...(preference?{track_selection:preference}:{})};
+    browser.runtime.sendMessage({type:'kitty-download-settings',tabId,change}).catch(()=>{});
+  }
+  function renderTitle(node,item) {
+    if(item.title){node.textContent=item.title;node.title=item.title;}
+    else if(titleFailures.has(item.id))node.textContent=translate('Titre indisponible');
+    else node.replaceChildren(KittyShared.loadingDotsElement(translate('Récupération du titre…')));
+  }
+  const probeKey=item=>JSON.stringify(item.candidates||[]);
+  const needsProbe=item=>item.downloadable&&probed.get(item.id)!==probeKey(item);
+  async function probeItem(item,id) {
+    const key=probeKey(item);probed.set(item.id,key);if(titleFailures.delete(item.id)&&!item.title)render();
+    try {
+      const r=await browser.runtime.sendMessage({type:'kitty-probe-item',tabId:id,itemId:item.id});
+      if(tabId!==id||probed.get(item.id)!==key)return;
+      if(r?.ok){if(!r.title&&!item.title)titleFailures.add(item.id);await refresh(id);if(tabId===id)render();}
+      else {titleFailures.add(item.id);render();}
+    }catch{if(tabId===id&&probed.get(item.id)===key){titleFailures.add(item.id);render();}}
+  }
+  function trackSelection(id,itemId=current){return id===tabId?{...(preferences.get(itemId)||portablePreferences)}:{};}
   function trackSelections(){return Object.fromEntries([...checked].map(id=>[id,trackSelection(tabId,id)]));}
   function trackLabel(track){return [track.language,track.label,track.original?translate('Original'):null].filter(Boolean).join(' · ')||track.codec||translate('Audio');}
   function renderTracks(){
@@ -23,7 +45,7 @@
       select.value=pref.audioTrackId||audio.find(t=>t.language&&t.language===pref.audioLanguage)?.id||'';select.addEventListener('change',()=>{const next=trackSelection(tabId),chosen=audio.find(t=>t.id===select.value);
         delete next.audioTrackId;delete next.audioLanguage;
         if(chosen?.language&&audio.filter(t=>t.language===chosen.language).length===1)next.audioLanguage=chosen.language;else if(chosen)next.audioTrackId=chosen.id;
-        preferences.set(current,next);onSelect(item);});
+        preferences.set(current,next);remember(current,next);onSelect(item);});
       label.append(select);panel.append(label);}
     if(subs.length){const container=document.createElement(subs.length>1?'details':'div');
       if(subs.length>1){const summary=document.createElement('summary');summary.textContent=translate('Sous-titres');container.append(summary);}
@@ -33,36 +55,36 @@
           if(check.checked){if(track.language&&subs.filter(t=>t.language===track.language).length===1)langs.add(track.language);else ids.add(track.id);}
           if(ids.size)next.subtitleTrackIds=[...ids];else delete next.subtitleTrackIds;
           if(langs.size)next.subtitleLanguages=[...langs];else delete next.subtitleLanguages;
-          preferences.set(current,next);onSelect(item);renderTracks();});
+          preferences.set(current,next);remember(current,next);onSelect(item);renderTracks();});
         label.append(check,document.createTextNode(translate('Sous-titres')+' · '+trackLabel(track)+(track.automatic?' · '+translate('Automatiques'):'')));container.append(label);}
       panel.append(container);}
   }
   async function probeSelected(){const item=items.find(i=>i.id===current),id=tabId;
-    if(!el('mediaTracks')||!item?.downloadable||probed.has(item.id))return;probed.add(item.id);
-    try{const r=await browser.runtime.sendMessage({type:'kitty-probe-item',tabId:id,itemId:item.id});if(r?.ok&&tabId===id)await refresh(id);}catch{}}
+    if(!el('mediaTracks')||!item||!needsProbe(item))return;
+    await probeItem(item,id);}
   const wordCount=n=>n+' '+translate(n===1?'média détecté':'médias détectés');
   function thumbnail(item){const img=document.createElement('img');img.className='mediaThumbnail';img.alt='';img.loading='lazy';img.referrerPolicy='no-referrer';
     if(item.thumbnail&&/^https?:\/\//.test(item.thumbnail))img.src=item.thumbnail;else img.classList.add('missing');img.addEventListener('error',()=>{img.removeAttribute('src');img.classList.add('missing');});return img;}
   async function enrich(){
-    const work=items.filter(i=>i.downloadable&&(!i.thumbnail||['filename',''].includes(i.titleSource))&&!probed.has(i.id));
+    const work=items.filter(i=>(!i.thumbnail||['filename',''].includes(i.titleSource))&&needsProbe(i));
     const id=tabId;
     // Lazy metadata only for an opened chooser; at most two simultaneous probes.
-    async function next(){while(work.length&&tabId===id&&opened){const item=work.shift();probed.add(item.id);
-      try{const r=await browser.runtime.sendMessage({type:'kitty-probe-item',tabId:id,itemId:item.id});if(r?.ok&&tabId===id)await refresh(id);}catch{}}}
+    async function next(){while(work.length&&tabId===id&&opened){const item=work.shift();if(needsProbe(item))await probeItem(item,id);}}
     await Promise.all([next(),next()]);
   }
-  function choose(id){current=id;onSelect(items.find(i=>i.id===id));renderSingle();probeSelected();}
+  function choose(id){current=id;remember(id);onSelect(items.find(i=>i.id===id));renderSingle();probeSelected();}
   function renderSingle(){
     const one=items.length===1;el('mediaSingle').hidden=!one;
-    if(one){const item=items[0];el('mediaSingle').replaceChildren(thumbnail(item));const title=document.createElement('span');title.textContent=item.title;title.title=item.title;el('mediaSingle').append(title);}
+    if(one){const item=items[0];el('mediaSingle').replaceChildren(thumbnail(item));const title=document.createElement('span');renderTitle(title,item);el('mediaSingle').append(title);}
     el('mediaCount').hidden=items.length<2;el('mediaCount').textContent=wordCount(items.length);el('mediaCount').setAttribute('aria-expanded',String(opened));
     renderTracks();
   }
   const admissible=item=>item.selectable!==false;
   function toggle(item){if(!admissible(item))return;if(checked.has(item.id))checked.delete(item.id);else checked.add(item.id);}
   function selectionCount(){
-    const available=items.filter(admissible),all=available.length>0&&available.every(i=>checked.has(i.id));
-    el('mediaSelectAll').textContent=translate(all?'Tout désélectionner':'Tout sélectionner');el('mediaSelectAll').disabled=!available.length;
+    const available=items.filter(admissible);
+    el('mediaSelectAll').textContent=translate('Tout sélectionner');el('mediaSelectAll').disabled=!available.length;
+    el('mediaDeselectAll').textContent=translate('Tout désélectionner');el('mediaDeselectAll').disabled=!checked.size;
     el('mediaBatch').textContent=translate('Ajouter la sélection')+(checked.size?' · '+checked.size:'');el('mediaBatch').disabled=batchBusy||!checked.size;
   }
   function render(){
@@ -70,11 +92,11 @@
     el('mediaRows').replaceChildren();
     for(const item of items){
       const row=document.createElement('div');row.className='mediaRow';
-      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=checked.has(item.id);checkbox.disabled=!admissible(item);checkbox.setAttribute('aria-label',translate('Sélectionner')+' '+item.title);checkbox.dataset.itemId=item.id;
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=checked.has(item.id);checkbox.disabled=!admissible(item);checkbox.setAttribute('aria-label',translate('Sélectionner')+' '+(item.title||translate('Récupération du titre…')));checkbox.dataset.itemId=item.id;
       checkbox.addEventListener('change',()=>{if(checkbox.checked){checked.add(item.id);choose(item.id);}else checked.delete(item.id);render();});
       const chooseButton=document.createElement('button');chooseButton.type='button';chooseButton.className='mediaChoose';chooseButton.dataset.itemId=item.id;chooseButton.setAttribute('aria-pressed',String(item.id===current));
       chooseButton.append(thumbnail(item));const info=document.createElement('span');info.className='mediaInfo';
-      const title=document.createElement('span');title.className='mediaTitle';title.textContent=item.title;title.title=item.title;
+      const title=document.createElement('span');title.className='mediaTitle';renderTitle(title,item);
       const detail=document.createElement('small');detail.textContent=!item.downloadable?translate('Source à résoudre au téléchargement'):translate(item.mediaKind==='audio'?'Audio':'Vidéo')+(item.duration?' · '+Math.floor(item.duration/60)+':'+String(Math.floor(item.duration%60)).padStart(2,'0'):'');
       info.append(title,detail);chooseButton.append(info);chooseButton.addEventListener('click',()=>{toggle(item);choose(item.id);render();});row.append(checkbox,chooseButton);el('mediaRows').append(row);
     }
@@ -83,11 +105,19 @@
   async function refresh(id){
     const turn=++generation;
     try {const result=await browser.runtime.sendMessage({type:'kitty-media-items',tabId:id});if(turn!==generation)return;
-      if(tabId!==id){probed.clear();preferences.clear();checked.clear();current=null;signature='';opened=false;}
+      if(tabId!==id){probed.clear();titleFailures.clear();preferences.clear();checked.clear();current=null;signature='';opened=false;}
       tabId=id;items=result?.ok&&Array.isArray(result.items)?result.items:[];
+      const saved=await browser.runtime.sendMessage({type:'kitty-download-settings',tabId:id});
+      if(turn!==generation)return;
+      if(saved?.ok){
+        if(pageUrl && pageUrl!==saved.pageUrl){preferences.clear();probed.clear();titleFailures.clear();checked.clear();current=null;signature='';opened=false;}
+        pageUrl=saved.pageUrl;portablePreferences=saved.trackPreferences||{};
+        for(const [key,value] of Object.entries(saved.trackSelections||{}))if(!preferences.has(key))preferences.set(key,value);
+        if(!current&&items.some(i=>i.id===saved.itemId)){current=saved.itemId;onSelect(items.find(i=>i.id===current));}}
+
       checked=new Set([...checked].filter(id=>items.some(i=>i.id===id&&admissible(i))));
       if(!items.some(i=>i.id===current)){current=items.find(i=>i.downloadable)?.id||items[0]?.id||null;onSelect(items.find(i=>i.id===current));}
-      const next=JSON.stringify(items);if(next!==signature){signature=next;render();}
+      const next=JSON.stringify([items,portablePreferences,[...preferences]]);if(next!==signature){signature=next;render();}
       el('mediaItemsPanel').hidden=!items.length;
       if(items.length)el('hlsPanel').hidden=true;
       probeSelected();
@@ -96,8 +126,10 @@
   function start(options={}){
     translate=options.translate||translate;onSelect=options.onSelect||onSelect;onBatch=options.onBatch||onBatch;
     if(!el('mediaCount'))return;
+    const style=document.createElement('style');style.textContent=KittyShared.LOADING_DOTS_CSS;document.head?.append(style);
     el('mediaCount').addEventListener('click',()=>{opened=!opened;render();if(opened)enrich();});
-    el('mediaSelectAll').addEventListener('click',()=>{const available=items.filter(admissible);checked=available.length&&available.every(i=>checked.has(i.id))?new Set():new Set(available.map(i=>i.id));render();});
+    el('mediaSelectAll').addEventListener('click',()=>{checked=new Set(items.filter(admissible).map(i=>i.id));render();});
+    el('mediaDeselectAll').addEventListener('click',()=>{checked.clear();render();});
     el('mediaBatch').addEventListener('click',async()=>{const ids=[...checked],batchTab=tabId;if(!ids.length||batchBusy)return;batchBusy=true;selectionCount();
       try{const result=await onBatch({tabId,itemIds:ids,trackSelections:trackSelections()});if(tabId===batchTab)for(const id of ids){const entry=result?.results?.find(r=>r.itemId===id);
         if(!result?.results||entry?.ok||['already_queued','already_active','already_downloaded'].includes(entry?.code))checked.delete(id);}

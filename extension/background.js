@@ -94,7 +94,7 @@ if (hlsStore && browser.webRequest) {
   });
 }
 function isKittyUi(sender) {
-  return sender?.url === browser.runtime.getURL("popup.html");
+  return Boolean(browser.runtime.getURL && sender?.url === browser.runtime.getURL("popup.html"));
 }
 async function hlsForTab(tabId) {
   if (!hlsStore || !Number.isInteger(tabId)) return [];
@@ -139,7 +139,8 @@ async function withHlsFallbacks(payload, tabId) {
     ? [...candidates.filter(c=>c.type==='direct_audio'), ...candidates.filter(c=>c.type!=='direct_audio')] : candidates;
   const family = c => c.type.startsWith('direct_') ? 'direct' : c.type;
   const diverse = preferred.filter((c,i)=>preferred.findIndex(v=>family(v)===family(c))===i);
-  const planned = [...diverse, ...preferred.filter(c=>!diverse.includes(c))].slice(0,3);
+  const selected=candidates.find(c=>c.id===payload.preferred_source_id);
+  const planned = [...(selected?[selected]:[]),...diverse,...preferred.filter(c=>!diverse.includes(c))].filter((c,i,all)=>all.indexOf(c)===i).slice(0,3);
   if (payload.automatic) {
     console.debug('[Kitty media] catalogue candidates accepted:', planned.map(c=>c.type).join(','));
     return {...payload,media_fallbacks:planned.map(mediaPayload)};
@@ -200,15 +201,25 @@ async function downloadItem(message) {
   if(!item?.downloadable)return {ok:false,error:'Aucune source HTTP exploitable pour ce média.'};
   const network=item.candidates.filter(c=>c.type!=='ytdlp'&&!c.hlsProtected)
     .sort((a,b)=>(b.maxHeight||0)-(a.maxHeight||0));
+  const selected=network.find(c=>c.id===message.preferred_source_id);
+  if(selected){network.splice(network.indexOf(selected),1);network.unshift(selected);}
   const diverse=network.filter((c,i)=>network.findIndex(v=>v.sourceType===c.sourceType)===i);
   // Include the original (often unknown height) as well as transcodes. The
   // backend resolves these bounded, item-owned candidates before planning.
   const sources=[...diverse,...network.filter(c=>!diverse.includes(c))].slice(0,12);
   const upgrade=requestContextUpgrade(comp,sources);if(upgrade)return upgrade;
-  const result=await nativeMessage({action:'download',url:item.extractionUrl,mode:message.mode||'1080',force:Boolean(message.force),automatic:true,
+  const requestedMode=message.mode||'1080';
+  const mode=message.shared&&item.mediaKind==='audio'&&['720','1080','best'].includes(requestedMode)?'audio':requestedMode;
+  const payload={action:'download',url:item.extractionUrl,mode,force:Boolean(message.force),automatic:true,
     media_item:{id:item.id,page_url:item.pageUrl,title:item.title,title_source:item.titleSource,thumbnail:item.thumbnail,media_kind:item.mediaKind,
       explicit_sources:item.explicitSources,prefer_extractor:item.preferExtractor},
-    media_fallbacks:sources.map(c=>({...mediaPayload(c),media_item_id:item.id})),track_selection:message.track_selection});
+    media_fallbacks:sources.map(c=>({...mediaPayload(c),media_item_id:item.id})),track_selection:message.track_selection};
+  if(message.shared){
+    payload.track_policy='prefer_available';
+    if(sources.some(c=>c.id===message.preferred_source_id))payload.preferred_source_id=message.preferred_source_id;
+    return dispatchSharedDownload(payload,message);
+  }
+  const result=await nativeMessage(payload);
   invalidateStatus();return result;
 }
 
@@ -286,6 +297,118 @@ async function savedDownloadMode() {
   return saved?.imageOnlyMode ? "image" : saved?.selectedMode || "1080";
 }
 
+
+// Both entry points resolve preferences and targets here. Storage is owned by
+// the background, so closing the popup cannot interrupt a pending change.
+let downloadOperation = Promise.resolve();
+function serialDownloadOperation(operation) {
+  const result = downloadOperation.then(operation);
+  downloadOperation = result.catch(() => {});
+  return result;
+}
+function cleanTrackPreferences(raw) {
+  const result = {};
+  if (!raw || typeof raw !== 'object') return result;
+  for (const key of ['audioLanguage','audioTrackId'])
+    if(typeof raw[key]==='string' && raw[key].length<=200 && !/[\x00-\x1f\x7f]/.test(raw[key]))result[key]=raw[key];
+  for (const key of ['subtitleLanguages','subtitleTrackIds'])
+    if(Array.isArray(raw[key]))result[key]=[...new Set(raw[key].filter(v=>typeof v==='string'&&v.length>0&&v.length<=200&&!/[\x00-\x1f\x7f]/.test(v)))].slice(0,20);
+  if(typeof raw.preferOriginal==='boolean')result.preferOriginal=raw.preferOriginal;
+  return result;
+}
+async function downloadSettings(tabId, change) {
+  const tab=await browser.tabs.get(tabId);
+  const saved=await browser.storage.local.get(['kittyTrackPreferences','kittyDownloadTargets']);
+  const targets={...(saved?.kittyDownloadTargets||{})};
+  const scoped=targets[tabId]?.pageUrl===tab.url ? targets[tabId] : {pageUrl:tab.url,tracks:{}};
+  let tracks=cleanTrackPreferences(saved?.kittyTrackPreferences);
+  delete tracks.audioTrackId;delete tracks.subtitleTrackIds;
+  if(change) {
+    if(Object.hasOwn(change,'itemId'))scoped.itemId=typeof change.itemId==='string'?change.itemId:null;
+    if(Object.hasOwn(change,'collectionUrl'))scoped.collectionUrl=httpUrl(change.collectionUrl);
+    if(Object.hasOwn(change,'candidateId'))scoped.candidateId=typeof change.candidateId==='string'?change.candidateId:null;
+    if(change.track_selection && typeof change.itemId==='string') {
+      const preference=cleanTrackPreferences(change.track_selection);
+      scoped.tracks={...scoped.tracks,[change.itemId]:preference};
+      // Languages are portable; opaque IDs remain tied to this item and page.
+      tracks={...preference};delete tracks.audioTrackId;delete tracks.subtitleTrackIds;
+      const item=(await itemsForTab(tabId)).find(i=>i.id===change.itemId);
+      const audio=item?.audioTracks?.find(t=>t.id===preference.audioTrackId);
+      if(audio?.language)tracks.audioLanguage=audio.language;
+      const languages=(preference.subtitleTrackIds||[]).map(id=>item?.subtitleTracks?.find(t=>t.id===id)?.language).filter(Boolean);
+      if(languages.length)tracks.subtitleLanguages=[...new Set([...(tracks.subtitleLanguages||[]),...languages])];
+    }
+    targets[tabId]=scoped;
+    const bounded=Object.fromEntries(Object.entries(targets).slice(-100));
+    await browser.storage.local.set({kittyTrackPreferences:tracks,kittyDownloadTargets:bounded});
+  }
+  return {ok:true,pageUrl:tab.url,itemId:scoped.itemId||null,candidateId:scoped.candidateId||null,
+    trackPreferences:tracks,trackSelections:scoped.tracks||{},collectionUrl:scoped.collectionUrl||null};
+}
+function sharedRequestKey(payload) {
+  // Use the stable logical identity and effective options. Never include
+  // captured credentials, signed network URLs or transient probe metadata.
+  const identity=payload.media_item ? [payload.media_item.page_url,payload.media_item.id] : [payload.url];
+  return JSON.stringify([identity,payload.mode,payload.track_selection||{},
+    payload.track_policy||'strict',payload.preferred_source_id||null]);
+}
+
+async function dispatchSharedDownload(payload, message) {
+  if(payload.track_policy==='prefer_available') {
+    let comp=await ensureCompatibility();
+    if(!KittyShared.supportsAdaptiveTracks(comp)){compatibilityCache=null;comp=await ensureCompatibility();}
+    if(!KittyShared.supportsAdaptiveTracks(comp)) {
+      if(Object.keys(payload.track_selection||{}).length || payload.preferred_source_id)
+        return {ok:false,code:'adaptive_tracks_backend_update_required',error:'Ces préférences nécessitent Kitty Backend v8.49 ou plus récent. Lance la mise à jour du backend.'};
+      delete payload.track_policy;
+    }
+  }
+  const requestKey=sharedRequestKey(payload);
+  const result=await nativeMessage({...payload,force:message.forceToken===requestKey});
+  invalidateStatus();
+  return {...result,requestKey,selectedMode:payload.mode};
+}
+async function addDownload(message,sender) {
+  const tabId=isKittyUi(sender)?message.tabId:sender?.tab?.id;
+  if(!Number.isInteger(tabId) || (!isKittyUi(sender) && sender.frameId!==0))
+    return {ok:false,error:'Requête Kitty non autorisée.'};
+  const tab=await browser.tabs.get(tabId);
+  if(!isKittyUi(sender) && sender.url && sender.url!==tab.url)return {ok:false,code:'media_not_detected',error:'Le média n’est plus disponible sur le site source.'};
+  const settings=await downloadSettings(tabId);
+  let mode=await savedDownloadMode();
+  const saved=await browser.storage.local.get('playlistMode');
+  if(mode!=='image' && saved?.playlistMode && settings.collectionUrl)
+    return dispatchSharedDownload({action:'download_playlist',url:settings.collectionUrl,mode},message);
+  if(mode!=='image') {
+    try {await browser.tabs.sendMessage?.(tabId,{type:'kitty-media-rescan'});}catch{}
+    const items=await itemsForTab(tabId);
+    const item=items.find(i=>i.id===settings.itemId) || items.find(i=>i.downloadable) || items[0];
+    const track_selection=item && Object.hasOwn(settings.trackSelections,item.id)
+      ? settings.trackSelections[item.id] : settings.trackPreferences;
+    if(item) {
+      if(item.mediaKind==='audio'&&['720','1080','best'].includes(mode))mode='audio';
+      return downloadItem({tabId,itemId:item.id,mode,track_selection,
+        preferred_source_id:settings.candidateId,shared:true,forceToken:message.forceToken});
+    }
+  }
+  let resolved;
+  try {resolved=await browser.tabs.sendMessage?.(tabId,{type:'kitty-resolve-media-url'});}catch{}
+  if(resolved?.error)return {ok:false,code:'media_not_detected',error:resolved.error};
+  const url=httpUrl(resolved?.url)||httpUrl(tab.url);
+  if(!url)return {ok:false,code:'media_not_detected',error:'URL HTTP/HTTPS requise.'};
+  const catalogue=mode==='image'?[]:await hlsForTab(tabId);
+  const selected=catalogue.find(c=>c.id===settings.candidateId);
+  if(['720','1080','best'].includes(mode) && (selected?.type==='direct_audio' ||
+      catalogue.length && catalogue.every(c=>c.type==='direct_audio'||c.hls?.audio_only)))mode='audio';
+  let payload=await withHlsFallbacks({action:'download',url,mode,
+    ...(selected?{preferred_source_id:selected.id}:{})},tabId);
+  if(mode!=='image') {
+    if(!payload.media_fallbacks?.some(c=>c.id===payload.preferred_source_id))delete payload.preferred_source_id;
+    payload.track_selection=settings.trackPreferences;
+    payload.track_policy='prefer_available';
+  }
+  return dispatchSharedDownload(payload,message);
+}
 
 async function rawNativeMessage(payload) {
   const result=await browser.runtime.sendNativeMessage(HOST, { ...payload, client: NATIVE_CLIENT });
@@ -410,7 +533,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     return (async()=>{
       if(!Array.isArray(message.itemIds)||message.itemIds.length>100)return {ok:false,error:'Sélection invalide.'};
       const results=[];
-      for(const itemId of new Set(message.itemIds))results.push({itemId,...await downloadItem({...message,itemId,track_selection:message.trackSelections?.[itemId]})});
+      for(const itemId of new Set(message.itemIds))results.push({itemId,...await downloadItem({...message,itemId,shared:true,track_selection:message.trackSelections?.[itemId]})});
       return {ok:true,results,added:results.filter(r=>r.ok).length};
     })();
   }
@@ -439,24 +562,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
     return chosenHls(message);
   }
 
-  if (message.type === "kitty-pill-download") {
-    return (async () => {
-      const url = message.url;
-      if (!url || !/^https?:\/\//i.test(url)) {
-        return { ok: false, error: "URL HTTP/HTTPS requise." };
-      }
-
-      const mode = await savedDownloadMode();
-      const result = await nativeMessage(await withHlsFallbacks({
-        action: "download",
-        url,
-        mode,
-        force: Boolean(message.force)
-      }, sender?.tab?.id));
-
-      invalidateStatus();
-      return { ...result, selectedMode: mode };
-    })();
+  if(message.type==='kitty-download-settings') {
+    if(!isKittyUi(sender))return Promise.resolve({ok:false,error:'Requête Kitty non autorisée.'});
+    return serialDownloadOperation(()=>downloadSettings(message.tabId,message.change));
+  }
+  if(message.type==='kitty-add-download' || message.type==='kitty-pill-download') {
+    return serialDownloadOperation(()=>addDownload(message,sender));
   }
 
 

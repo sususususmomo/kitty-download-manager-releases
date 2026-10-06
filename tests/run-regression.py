@@ -933,7 +933,7 @@ window.browser = {
   },
   runtime: {
     sendMessage: async message => {
-      if (message?.type === "kitty-pill-download") { window.__kittyDownloads.push(message); return {ok:true,job_id:"job-1"}; }
+      if (message?.type === "kitty-add-download") { window.__kittyDownloads.push(message); return {ok:true,job_id:"job-1"}; }
       if (message?.type === "kitty-pill-status") return {ok:true,state:{active:null,queue:[],history:[]}};
       return {ok:true};
     },
@@ -961,7 +961,7 @@ window.browser = {
                 button.click()
                 page.wait_for_timeout(80)
                 equal(page.evaluate("window.__kittyDownloads.length"), 1, f"clic pill {style} n'envoie pas de téléchargement")
-                equal(page.evaluate("window.__kittyDownloads[0]?.type"), "kitty-pill-download", f"payload pill {style} incorrect")
+                equal(page.evaluate("window.__kittyDownloads[0]?.type"), "kitty-add-download", f"payload pill {style} incorrect")
                 page.close()
 
             for style in ("minimal", "cat"):
@@ -2062,8 +2062,8 @@ def test_i18n_display_layer_keeps_internal_contracts():
     for internal in ('data-pill-style="minimal"', 'data-pill-style="cat"', 'data-pill-style="classic"'):
         check(internal in html, f"clé interne modifiée: {internal}")
     check('new Set(["minimal", "cat", "classic"])' in pill, "clés internes pill modifiées")
-    check('type: "kitty-pill-download"' in pill, "message interne pill modifié")
-    check('action: "download"' in popup, "action Native Messaging download modifiée")
+    check('type: "kitty-add-download"' in pill, "message interne pill modifié")
+    check('type:"kitty-add-download"' in popup and "action:'download'" in (EXT / 'background.js').read_text(), "action Native Messaging download commune absente")
     check('const NATIVE_PROTOCOL_VERSION = 1;' in (EXT / "shared.js").read_text(encoding="utf-8"), "protocole interne modifié")
 
     content_js = manifest["content_scripts"][0]["js"]
@@ -3494,7 +3494,7 @@ def test_playlist_ui_contract():
     check("if (!playlistModeEnabled) setModeMenuOpen(false)" in js, "menu ne reste pas ouvert en playlist")
     check("playlistModeToggleEl.classList.toggle(\"active\", showPlaylist)" in js, "surbrillance playlist absente")
     check("modeMenuItems.forEach" in js and "item.classList.toggle(\"active\", active)" in js, "surbrillance format absente")
-    check('type: "kitty-download-playlist"' in js, "popup ne transmet pas playlist")
+    check("rememberCollectionTarget()" in js and "type:'kitty-add-download'" in js, "playlist ne passe pas par l’opération commune")
     check('message.type === "kitty-download-playlist"' in bg, "background playlist absent")
 
 

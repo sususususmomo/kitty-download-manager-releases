@@ -19,7 +19,7 @@ from errors import classify_backend_error
 from hls import validate_source, apply_options, network_resource_ids
 from metadata_guard import extract_metadata, MetadataError
 from media_item import trace_item, trace_url, prefers_extractor, FATAL_PAGE_CODES
-from media_tracks import catalogue, source_id, validate_selection, compose_info
+from media_tracks import catalogue, source_id, validate_selection, compose_info, available_selection, KINDS
 
 PAGE_TIMEOUT = 30
 NETWORK_TIMEOUT = 20
@@ -125,7 +125,7 @@ def build_item_plan(candidate, job, options, cohort=None):
     """Use yt-dlp's existing selector, metadata only, then bind its choice."""
     owned = (getattr(candidate, '_track_cohort', None) or cohort or [candidate]) if job.get('media_item') else [candidate]
     info, tracks, audio, subtitles, auxiliary = compose_info(candidate, owned,
-        validate_selection(job.get('track_selection')), job['mode'])
+        validate_selection(job.get('track_selection')), job['mode'], adapt=job.get('track_policy') == 'prefer_available')
     policy = options['format']
     if job.get('media_item') and job['mode'] in ('720', '1080', 'best'):
         cap = '' if job['mode'] == 'best' else '[height<=?' + job['mode'] + ']'
@@ -299,7 +299,8 @@ def resolve_candidates(options, job, check_control=lambda: None, log=lambda _: N
             break
     # A selected item's attached sources supersede page extraction. Unresolved
     # items use only their own File/embed URL; ordinary page jobs stay unchanged.
-    if not item or not sources or prefer_page:
+    own_extraction_url = job.get('track_policy') == 'prefer_available' and item and page != observed_page and all(s['url'] != page for s in sources)
+    if not item or not sources or prefer_page or own_extraction_url:
         sources.insert(0, None)
     if item:
         trace_item(log, 'selected', {'id': item['id'], 'title': item.get('title')})
@@ -363,6 +364,15 @@ def resolve_candidates(options, job, check_control=lambda: None, log=lambda _: N
             stopped.set()
     if fatal_page_error:
         raise fatal_page_error
+    if (not results and request.mode == 'video' and job.get('track_policy') == 'prefer_available'
+            and probed_candidates and all(not c.videoTracks and c.hasAudio is True for c in probed_candidates)):
+        request = DownloadRequest.from_mode('audio')
+        job['_effective_mode'] = 'audio'
+        for candidate in probed_candidates:
+            candidate.score = scoreCandidate(candidate, request)
+            if math.isfinite(candidate.score):
+                results.append(candidate)
+        log('unavailable video preference: Automatic selected audio-only media')
     if not results:
         failure = (MetadataError('format_unavailable', 'Aucune source ne correspond au format demandé.') if incompatible
                    else failures[-1] if failures else MetadataError('metadata_timeout', 'Analyse des sources trop longue.'))
@@ -371,8 +381,14 @@ def resolve_candidates(options, job, check_control=lambda: None, log=lambda _: N
         eligible = []
         for candidate in probed_candidates:
             try:
-                owned = probed_candidates if item else [candidate]
-                prepared, *_ = compose_info(candidate, owned, track_selection, job['mode'])
+                owned = probed_candidates if item and not prefer_page else [candidate]
+                if job.get('track_policy') == 'prefer_available':
+                    tracks = {kind: [t for c in owned for t in catalogue(c.info, source_id(c.source), c.sourceType)[kind]] for kind in KINDS}
+                    available = available_selection(tracks, track_selection)
+                    candidate._preference_matches = sum(len(v) if isinstance(v, list) else 1
+                        for k, v in available.items() if k != 'preferOriginal')
+                prepared, *_ = compose_info(candidate, owned, track_selection, job.get('_effective_mode', job['mode']),
+                                             adapt=job.get('track_policy') == 'prefer_available')
                 effective = candidate_from_info(prepared, candidate.source, job, request)
                 candidate.score = scoreCandidate(effective, request)
                 if math.isfinite(candidate.score):
@@ -404,7 +420,7 @@ def resolve_candidates(options, job, check_control=lambda: None, log=lambda _: N
         for candidate in results:
             candidate._track_cohort = [candidate]
     # yt-dlp preference is strictly a tie-breaker, not part of the quality score.
-    results.sort(key=lambda c: ((prefer_page and c.sourceType == 'ytdlp',) if prefer_page else ())
+    results.sort(key=lambda c: (bool(job.get('preferred_source_id') and source_id(c.source) == job['preferred_source_id']), getattr(c, '_preference_matches', 0)) + ((prefer_page and c.sourceType == 'ytdlp',) if prefer_page else ())
                  + ((c.maxHeight or 0,) if item and request.mode == 'video' else ())
                  + (c.score, c.sourceType == 'ytdlp'), reverse=True)
     log('selected candidate: ' + results[0].sourceType)
