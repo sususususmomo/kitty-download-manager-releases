@@ -22,7 +22,7 @@ from queue_store import queue_lock
 
 HOST_NAME = "com.kitty.download_manager"
 EXTENSION_ID = "kitty-download-manager@local"
-BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "errors.py", "app_paths.py",
+BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "hls.py", "metadata_guard.py", "runtime_check.py", "download_planner.py", "request_context.py", "source_refresh.py", "media_tracks.py", "media_item.py", "direct_media.py", "errors.py", "app_paths.py",
                  "compatibility.py", "runtime_storage.py", "queue_store.py", "platform_support.py",
                  "installer_support.py", "macos_install.py")
 # Pinned provider checksums verified on 2026-10-03.

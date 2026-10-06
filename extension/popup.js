@@ -949,10 +949,10 @@ function renderActive(active, state = latestState) {
   if (phase === "metadata" || phase === "downloading") showCatGame(active);
   else hideCatGame();
 
-  const source = sourceInfo(active.url);
+  const source = sourceInfo(jobSourceUrl(active));
   activeSourceEl.style.display = "inline-flex";
   activeSourceEl.title = "";
-  updateSourceHost(activeSourceEl, active.url, source);
+  updateSourceHost(activeSourceEl, jobSourceUrl(active), source);
 
   if (active.title) {
     titleEl.classList.remove("activeLoading");
@@ -984,8 +984,10 @@ function renderActive(active, state = latestState) {
   }
 
   statusEl.textContent = phase === "metadata"
-    ? I18N.tr("Récupération des métadonnées…")
-    : `${I18N.tr("Téléchargement")} • ${I18N.tr(modeLabel(active.mode))}`;
+    ? I18N.tr(active.resolver_status === 'finding' ? "Recherche de la meilleure source…" : "Récupération des métadonnées…")
+    : active.automatic && active.selected_source_type
+      ? `${I18N.tr("Source sélectionnée")} · ${active.selected_source_type === 'ytdlp' ? 'yt-dlp' : I18N.tr(KittyShared.mediaLabel(active.media_source))}${active.selected_height ? ' · '+active.selected_height+'p' : ''}`
+      : `${I18N.tr("Téléchargement")} • ${active.media_source ? I18N.tr(KittyShared.mediaLabel(active.media_source))+" • " : ""}${I18N.tr(modeLabel(active.mode))}`;
 }
 
 function itemTitle(job) {
@@ -996,7 +998,7 @@ function itemTitle(job) {
 function renderQueue(queue, active = latestState.active) {
   const signature = JSON.stringify(queue.map(j => [
     j.id, j.title || "", j.metadata_status || "", j.metadata_error || "",
-    j.metadata_attempts || 0, j.metadata_pid || null, j.mode, j.url, Boolean(j.paused),
+    j.metadata_attempts || 0, j.metadata_pid || null, j.mode, j.url, j.media_source?.page_url || "", Boolean(j.paused),
     j.playlist_position || null, j.playlist_total || null
   ])) + `|${active?.id || ""}|${Boolean(latestState.queue_paused)}`;
 
@@ -1064,10 +1066,10 @@ function renderQueue(queue, active = latestState.active) {
     }
 
     text.append(title, uiElement("div", "itemMeta",
-      `${positionText}${I18N.tr(modeLabel(job.mode))} • ${I18N.tr(positionKind)}${pauseLabel}`));
+      `${positionText}${job.media_source ? I18N.tr(KittyShared.mediaLabel(job.media_source))+" • " : ""}${I18N.tr(modeLabel(job.mode))} • ${I18N.tr(positionKind)}${pauseLabel}`));
 
-    const source = sourceInfo(job.url);
-    const sourceBadge = sourceButtonElement(job.url, source);
+    const source = sourceInfo(jobSourceUrl(job));
+    const sourceBadge = sourceButtonElement(jobSourceUrl(job), source);
 
     const actions = document.createElement("div");
     actions.className = "queueRowActions";
@@ -1107,7 +1109,7 @@ function renderHistory(history) {
     job.id,
     job.status || "",
     job.title || "",
-    job.url || "",
+    job.url || "", job.media_source?.page_url || "",
     job.mode || "",
     job.finished_at || null,
     Boolean(job.already_present),
@@ -1141,14 +1143,14 @@ function renderHistory(history) {
       ? new Date(job.finished_at * 1000).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})
       : "";
     const existing = job.already_present ? ` • ${I18N.tr("déjà présent")}` : "";
-    const source = sourceInfo(job.url);
+    const source = sourceInfo(jobSourceUrl(job));
     const safeTitle = itemTitle(job) || source.label;
 
     const text = document.createElement("div");
     text.className = "itemText";
     text.append(
       uiElement("div", "itemTitle", `${symbol} ${safeTitle}`),
-      uiElement("div", "itemMeta", `${I18N.tr(modeLabel(job.mode))} • ${source.label}${existing}${when ? " • " + when : ""}`)
+      uiElement("div", "itemMeta", `${job.media_source ? I18N.tr(KittyShared.mediaLabel(job.media_source))+" • " : ""}${I18N.tr(modeLabel(job.mode))} • ${source.label}${existing}${when ? " • " + when : ""}`)
     );
     if (phase === "error") {
       const error = uiElement("div", "itemError", I18N.tr(job.error || "Erreur du backend"));
@@ -1158,7 +1160,7 @@ function renderHistory(history) {
 
     const sourceButtonWrap = document.createElement("div");
     sourceButtonWrap.className = "historySourceAction";
-    sourceButtonWrap.append(sourceButtonElement(job.url, source, true));
+    sourceButtonWrap.append(sourceButtonElement(jobSourceUrl(job), source, true));
     row.append(text, sourceButtonWrap);
 
     if (phase === "error") {
@@ -1186,6 +1188,10 @@ function renderHistory(history) {
 
     historyEl.append(row);
   });
+}
+
+function jobSourceUrl(job) {
+  return job?.media_source?.page_url || job?.url;
 }
 
 function safeSourceUrl(raw) {
@@ -1316,10 +1322,10 @@ function render(state) {
     const last = history[0];
     titleEl.classList.remove("activeLoading");
     titleEl.textContent = last.title || I18N.tr("Dernier téléchargement");
-    const source = sourceInfo(last.url);
+    const source = sourceInfo(jobSourceUrl(last));
     activeSourceEl.style.display = "inline-flex";
     activeSourceEl.title = "";
-    updateSourceHost(activeSourceEl, last.url, source);
+    updateSourceHost(activeSourceEl, jobSourceUrl(last), source);
 
     if (last.status === "finished") {
       setDownloadResultTint("finished");
@@ -1591,7 +1597,12 @@ function updateDependenciesHeaderState(state) {
 }
 
 
+let youtubeAuthLastStatus = {};
+let youtubeAuthStatusRevision = 0;
+let youtubeAuthActionBusy = false;
+
 function renderYoutubeAuth(auth) {
+  youtubeAuthLastStatus = auth || {};
   const configured = Boolean(auth?.configured);
   const pending = Boolean(auth?.pending);
   const state = auth?.state || (configured ? "configured" : "not_configured");
@@ -1638,7 +1649,7 @@ function renderYoutubeAuth(auth) {
     youtubeAuthDetailEl.textContent = auth?.error || "Configuration incomplète";
     youtubeAuthConfigureBtn.disabled = false;
     youtubeAuthConfigureBtn.textContent = configured ? "Renouveler…" : "Recommencer…";
-    youtubeAuthHintEl.textContent =
+    youtubeAuthHintEl.textContent = auth?.error_hint ||
       "L'ancien snapshot n'est jamais remplacé si une nouvelle configuration échoue.";
     return;
   }
@@ -1659,53 +1670,69 @@ function renderYoutubeAuth(auth) {
     youtubeAuthDetailEl.textContent = "Aucune session YouTube dédiée";
     youtubeAuthConfigureBtn.textContent = "Configurer YouTube…";
     youtubeAuthHintEl.textContent =
-      "Kitty ouvre un Firefox jetable dans un HOME séparé. Ton profil Firefox habituel n'est ni lu, ni copié, ni modifié.";
+      "Kitty ouvre un Firefox jetable avec ses propres données. Ton profil Firefox habituel n'est ni lu, ni copié, ni modifié.";
   }
 }
 
 async function restoreYoutubeAuth() {
+  if (youtubeAuthActionBusy) return;
+  const revision = ++youtubeAuthStatusRevision;
   try {
     const auth = await nativeMessage({ action: "youtube_auth_status" });
+    if (revision !== youtubeAuthStatusRevision) return;
     renderYoutubeAuth(auth);
     if (auth?.ok === false && auth?.error) {
       setSettingsStatus("YouTube : " + auth.error, "error");
     }
   } catch (err) {
-    renderYoutubeAuth({ ok: false, state: "error", error: err.message });
+    if (revision !== youtubeAuthStatusRevision) return;
+    renderYoutubeAuth({ ...youtubeAuthLastStatus, ok: false, state: "error", error: err.message });
   }
 }
 
 youtubeAuthConfigureBtn.addEventListener("click", async () => {
+  if (youtubeAuthActionBusy) return;
+  youtubeAuthActionBusy = true;
+  ++youtubeAuthStatusRevision;
   youtubeAuthConfigureBtn.disabled = true;
   setSettingsStatus("Ouverture d'un Firefox YouTube isolé…");
 
   try {
     const auth = await browser.runtime.sendMessage({ type: "kitty-youtube-auth-start" });
-    renderYoutubeAuth(auth);
+    if (!auth?.ok) youtubeAuthLastStatus = { ...youtubeAuthLastStatus, ...auth };
     if (!auth?.ok) throw new Error(auth?.error || "Impossible de créer la session YouTube.");
+    renderYoutubeAuth(auth);
     setSettingsStatus("Firefox dédié ouvert. Termine la connexion dans cette fenêtre.", "success");
   } catch (err) {
     setSettingsStatus("Erreur : " + err.message, "error");
-    await restoreYoutubeAuth();
+    renderYoutubeAuth({ ...youtubeAuthLastStatus, ok: false, state: "error", error: err.message });
+  } finally {
+    youtubeAuthActionBusy = false;
   }
 });
 
 youtubeAuthEnabledEl.addEventListener("change", async () => {
+  if (youtubeAuthActionBusy) return;
+  youtubeAuthActionBusy = true;
+  ++youtubeAuthStatusRevision;
   youtubeAuthEnabledEl.disabled = true;
   try {
     const auth = await nativeMessage({
       action: "youtube_auth_set_enabled",
       enabled: youtubeAuthEnabledEl.checked
     });
-    renderYoutubeAuth(auth);
+    if (!auth?.ok) youtubeAuthLastStatus = { ...youtubeAuthLastStatus, ...auth };
     if (!auth?.ok) throw new Error(auth?.error || "Impossible de modifier la session YouTube.");
+    renderYoutubeAuth(auth);
     setSettingsStatus(
       auth.enabled ? "Session YouTube activée." : "Session YouTube désactivée.",
       "success"
     );
   } catch (err) {
     setSettingsStatus("Erreur : " + err.message, "error");
-    await restoreYoutubeAuth();
+    renderYoutubeAuth({ ...youtubeAuthLastStatus, ok: false, state: "error", error: err.message });
+  } finally {
+    youtubeAuthActionBusy = false;
   }
 });
 
@@ -1720,6 +1747,7 @@ function clearYoutubeDeleteConfirmation() {
 }
 
 youtubeAuthDeleteBtn.addEventListener("click", async () => {
+  if (youtubeAuthActionBusy) return;
   if (!youtubeDeleteConfirming) {
     youtubeDeleteConfirming = true;
     youtubeAuthDeleteBtn.textContent = "Confirmer";
@@ -1729,16 +1757,20 @@ youtubeAuthDeleteBtn.addEventListener("click", async () => {
   }
 
   clearYoutubeDeleteConfirmation();
+  youtubeAuthActionBusy = true;
+  ++youtubeAuthStatusRevision;
   youtubeAuthDeleteBtn.disabled = true;
   try {
     const auth = await nativeMessage({ action: "youtube_auth_delete" });
-    renderYoutubeAuth(auth);
+    if (!auth?.ok) youtubeAuthLastStatus = { ...youtubeAuthLastStatus, ...auth };
     if (!auth?.ok) throw new Error(auth?.error || "Suppression impossible.");
+    renderYoutubeAuth(auth);
     setSettingsStatus("Session YouTube Kitty supprimée.", "success");
   } catch (err) {
     setSettingsStatus("Erreur : " + err.message, "error");
-    await restoreYoutubeAuth();
+    renderYoutubeAuth({ ...youtubeAuthLastStatus, ok: false, state: "error", error: err.message });
   } finally {
+    youtubeAuthActionBusy = false;
     youtubeAuthDeleteBtn.disabled = false;
   }
 });
@@ -2602,7 +2634,9 @@ downloadBtn.addEventListener("click", async () => {
 
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    const downloadUrl = await resolveTabDownloadUrl(tab);
+    const itemSelection = !imageOnlyModeEnabled && globalThis.KittyItemsPopup?.selection(tab?.id);
+    const hlsSelection = !itemSelection && globalThis.KittyMediaPopup?.selection(tab?.id);
+    const downloadUrl = itemSelection ? `item:${tab.id}:${itemSelection}` : hlsSelection ? `media:${tab.id}:${hlsSelection}` : await resolveTabDownloadUrl(tab);
 
     const samePending =
       pendingDuplicate &&
@@ -2612,12 +2646,15 @@ downloadBtn.addEventListener("click", async () => {
     const force = Boolean(samePending);
     statusEl.textContent = force ? "Nouveau téléchargement…" : "Démarrage…";
 
-    const r = await nativeMessage({
-      action: "download",
-      url: downloadUrl,
-      mode: effectiveDownloadMode(),
-      force
-    });
+    const payload = {url:downloadUrl, mode:effectiveDownloadMode(), force,
+      ...(itemSelection?{track_selection:globalThis.KittyItemsPopup?.trackSelection(tab.id,itemSelection)}:{})};
+    const r = itemSelection
+      ? await browser.runtime.sendMessage({...payload,type:"kitty-download-item",tabId:tab.id,itemId:itemSelection})
+      : hlsSelection
+      ? await browser.runtime.sendMessage({...payload, type:"kitty-download-media", tabId:tab.id, candidateId:hlsSelection})
+      : globalThis.KittyMediaPopup?.hasCandidates(tab?.id)
+        ? await browser.runtime.sendMessage({...payload, type:"kitty-download-page", tabId:tab.id})
+        : await nativeMessage({action: "download", ...payload});
 
     if (!r?.ok) {
       if (r?.code === "already_downloaded") {
@@ -2803,6 +2840,24 @@ async function initializePopup() {
   // request. Opening Settings still refreshes these values normally.
   restoreDestination();
   restoreYoutubeAuth();
+  globalThis.KittyItemsPopup?.start({translate:I18N.tr,onSelect:item=>{
+    if(item?.mediaKind==='audio'&&!imageOnlyModeEnabled&&!['audio','mp3'].includes(modeEl.value)){modeEl.value='audio';updateModePickerUI();}
+    resetDownloadButton();
+  },onBatch:async selection=>{
+    statusEl.textContent=I18N.tr("Ajout à la file…");
+    const result=await browser.runtime.sendMessage({...selection,type:'kitty-download-items',mode:effectiveDownloadMode()});
+    if(!result?.ok)throw new Error(result?.error||'Sélection indisponible');
+    const failures=result.results.filter(r=>!r.ok&&!['already_queued','already_active','already_downloaded'].includes(r.code));
+    const latest=result.results.at(-1)?.state;if(latest)render(latest);
+    statusEl.textContent=result.added+' '+I18N.tr('médias ajoutés à la file')+(failures.length?' · '+failures.length+' '+I18N.tr('indisponibles'):'');
+    return result;
+  }});
+  globalThis.KittyMediaPopup?.start({translate:I18N.tr,onSelect:candidate=>{
+    if (candidate?.type==='direct_audio' && !imageOnlyModeEnabled && !['audio','mp3'].includes(modeEl.value)) {
+      modeEl.value='audio'; updateModePickerUI();
+    }
+    resetDownloadButton();
+  }});
 }
 
 initializePopup().catch(error => {

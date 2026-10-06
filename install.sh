@@ -14,7 +14,7 @@ NM_FILE="$NM_DIR/com.kitty.download_manager.json"
 export PYTHONDONTWRITEBYTECODE=1
 
 echo
-echo "Kitty Download Manager V8.32"
+echo "Kitty Download Manager V8.48"
 echo "Préparation de l'installation / migration…"
 
 # Une V8 déjà installée passe par l'updater sûr : pause de file, arrêt externe
@@ -38,13 +38,13 @@ rm -f "$PREPARE_RESULT"
 mkdir -p "$INSTALL_DIR" "$NM_DIR" "$CONFIG_DIR" "$CACHE_DIR"
 chmod 700 "$INSTALL_DIR" "$CONFIG_DIR" "$CACHE_DIR" 2>/dev/null || true
 
-for file in host.py worker.py metadata.py image_download.py errors.py app_paths.py migrate.py compatibility.py maintenance.py runtime_storage.py queue_store.py platform_support.py; do
+for file in host.py worker.py metadata.py image_download.py hls.py metadata_guard.py runtime_check.py download_planner.py request_context.py source_refresh.py media_tracks.py media_item.py direct_media.py errors.py app_paths.py migrate.py compatibility.py maintenance.py runtime_storage.py queue_store.py platform_support.py; do
   cp "$ROOT/native-host/$file" "$INSTALL_DIR/$file"
 done
 
 chmod +x "$INSTALL_DIR/host.py" "$INSTALL_DIR/worker.py" "$INSTALL_DIR/metadata.py" "$INSTALL_DIR/migrate.py" "$INSTALL_DIR/compatibility.py" "$INSTALL_DIR/maintenance.py" "$INSTALL_DIR/runtime_storage.py"
 cp "$ROOT/LICENSE" "$INSTALL_DIR/LICENSE"
-chmod 644 "$INSTALL_DIR/image_download.py" "$INSTALL_DIR/errors.py" "$INSTALL_DIR/app_paths.py" "$INSTALL_DIR/queue_store.py" "$INSTALL_DIR/platform_support.py"
+chmod 644 "$INSTALL_DIR/image_download.py" "$INSTALL_DIR/hls.py" "$INSTALL_DIR/metadata_guard.py" "$INSTALL_DIR/download_planner.py" "$INSTALL_DIR/request_context.py" "$INSTALL_DIR/source_refresh.py" "$INSTALL_DIR/media_tracks.py" "$INSTALL_DIR/media_item.py" "$INSTALL_DIR/direct_media.py" "$INSTALL_DIR/errors.py" "$INSTALL_DIR/app_paths.py" "$INSTALL_DIR/queue_store.py" "$INSTALL_DIR/platform_support.py"
 
 # Syntax/import validation before switching away from the legacy backend.
 python3 -B - "$INSTALL_DIR" <<'PY'
@@ -55,7 +55,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-for name in ("host.py", "worker.py", "metadata.py", "image_download.py", "errors.py", "app_paths.py", "migrate.py", "compatibility.py", "maintenance.py", "runtime_storage.py", "queue_store.py", "platform_support.py"):
+for name in ("host.py", "worker.py", "metadata.py", "image_download.py", "hls.py", "metadata_guard.py", "runtime_check.py", "download_planner.py", "request_context.py", "source_refresh.py", "media_tracks.py", "media_item.py", "direct_media.py", "errors.py", "app_paths.py", "migrate.py", "compatibility.py", "maintenance.py", "runtime_storage.py", "queue_store.py", "platform_support.py"):
     path = root / name
     ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
@@ -102,7 +102,7 @@ MIGRATION_RESULT="$(cat "$FINALIZE_RESULT")"
 rm -f "$FINALIZE_RESULT"
 
 echo
-echo "Kitty Download Manager V8.32 installée."
+echo "Kitty Download Manager V8.48 installée."
 echo "Host       : $INSTALL_DIR/host.py"
 echo "Worker     : $INSTALL_DIR/worker.py"
 echo "Métadonnées: $INSTALL_DIR/metadata.py"

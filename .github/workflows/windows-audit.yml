@@ -1,0 +1,93 @@
+name: Kitty Windows audit
+on:
+  push:
+    branches: ['codex/windows-audit-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      KITTY_WINDOWS_AUDIT: '1'
+      KITTY_INSTALL_TRACEBACK: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Test dependencies
+        run: python -m pip install psutil mutagen 'yt-dlp[default]' selenium==4.50.0
+      - name: Python and frontend fault scenarios
+        run: |
+          python tests/test-windows-audit.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-youtube-session.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test-youtube-session-ui.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test-popup-startup.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-windows-port.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-windows-install-location.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-runtime-check.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-provider-media.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-production-timeouts.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: PowerShell 5.1 and online private installation
+        shell: powershell
+        run: |
+          & .\tests\test-windows-installer.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:KITTY_CI_INSTALL_DIR=Join-Path $env:RUNNER_TEMP 'Kitty Français & 100% !'
+          python tools/install-backend-for-ci.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verified Firefox
+        shell: powershell
+        run: |
+          $setup=Join-Path $env:RUNNER_TEMP 'kitty-firefox-setup.exe'
+          $directory=Join-Path $env:ProgramFiles 'Mozilla Firefox'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://download.mozilla.org/?product=firefox-latest-ssl&os=win64&lang=fr' -OutFile $setup
+          $signature=Get-AuthenticodeSignature -LiteralPath $setup
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Mozilla Corporation') { throw 'Firefox signature invalid' }
+          $process=Start-Process -FilePath $setup -ArgumentList @('/S', "/InstallDirectoryPath=`"$directory`"", '/DesktopShortcut=false', '/TaskbarShortcut=false', '/MaintenanceService=false') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Firefox installation failed' }
+          "KITTY_FIREFOX_BINARY=$(Join-Path $directory 'firefox.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Actual private runtime and bidirectional frontend scenarios
+        run: python tests/test-windows-native-audit.py
+      - name: Actual Firefox toolbar popup
+        env:
+          KITTY_VISUAL_TEST: '1'
+          SE_SKIP_DRIVER_IN_PATH: 'true'
+          SE_AVOID_STATS: 'true'
+          MOZ_HEADLESS_WIDTH: '1100'
+          MOZ_HEADLESS_HEIGHT: '800'
+        run: python tests/capture-windows-firefox.py
+      - name: Upgrade, remux, image and uninstall
+        env:
+          KITTY_INSTALLED_TEST: '1'
+        run: python tests/test-installed-windows.py
+      - name: Audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-audit-${{ matrix.os }}
+          path: |
+            artifacts/windows-firefox/
+            artifacts/windows-audit/
+          if-no-files-found: warn
+          retention-days: 14

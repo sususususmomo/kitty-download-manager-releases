@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
@@ -11,10 +10,12 @@ if str(NATIVE_DIR) not in sys.path:
     sys.path.insert(0, str(NATIVE_DIR))
 
 from app_paths import cache_dir, config_dir
-from platform_support import WINDOWS, configure_worker_job, metadata_deadline
+from platform_support import configure_worker_job
+from hls import apply_options as hls_options, error_info as hls_error_info
+from metadata_guard import extract_metadata, PROBE_TIMEOUT
 from errors import classify_backend_error
 from runtime_storage import append_log
-from queue_store import STATE_VERSION, QueueStateError, mutate_state, update_job
+from queue_store import STATE_VERSION, QueueStateError, mutate_state, update_job, read_state
 
 CACHE_DIR = cache_dir()
 QUEUE_FILE = CACHE_DIR / "queue.json"
@@ -63,14 +64,6 @@ def _cleanup_cookie_copy(path):
         pass
 
 
-class MetadataTimeout(Exception):
-    pass
-
-
-def _metadata_alarm_handler(signum, frame):
-    raise MetadataTimeout("Le probe métadonnées a dépassé 30 secondes.")
-
-
 def main():
     if len(sys.argv) not in (3, 4):
         return 2
@@ -78,15 +71,10 @@ def main():
     job_id, url = sys.argv[1], sys.argv[2]
     use_auth = len(sys.argv) == 4 and sys.argv[3] == "1"
     cookiefile = _prepare_cookie_copy(job_id, use_auth)
-    deadline = None
+    hls_used = False
 
     try:
         configure_worker_job()
-        if WINDOWS:
-            signal.signal(signal.SIGINT, _metadata_alarm_handler)
-            deadline = metadata_deadline(30)
-        import yt_dlp
-
         opts = {
             "quiet": True,
             "no_warnings": True,
@@ -101,6 +89,12 @@ def main():
         }
         if cookiefile:
             opts["cookiefile"] = str(cookiefile)
+        data = read_state(QUEUE_FILE, LOCK_FILE)
+        job = next((j for j in [data.get("active"), *data.get("queue", [])]
+                    if j and j.get("id") == job_id), {"url": url})
+        hls_used = bool(job.get("media_source"))
+        if job.get("media_source"):
+            hls_options(opts, job["media_source"])
 
         mutate_job(
             job_id,
@@ -111,12 +105,10 @@ def main():
         )
         log(f"début id={job_id}")
 
-        if hasattr(signal, "SIGALRM"):
-            signal.signal(signal.SIGALRM, _metadata_alarm_handler)
-            signal.alarm(30)
-
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        def on_fallback(source):
+            nonlocal hls_used
+            hls_used = True
+        info, _source = extract_metadata(opts, job, on_fallback=on_fallback, timeout=PROBE_TIMEOUT)
 
         title = ""
         if isinstance(info, dict):
@@ -132,9 +124,10 @@ def main():
 
     except Exception as exc:
         raw_error = str(exc).strip() or exc.__class__.__name__
-        error_info = classify_backend_error(
+        error_info = hls_error_info(exc) if hls_used else classify_backend_error(
             raw_error,
             context="metadata",
+            code_hint=getattr(exc, "code", None),
             youtube_auth=use_auth,
         )
         mutate_job(
@@ -148,18 +141,11 @@ def main():
         )
         log(
             f"erreur id={job_id} code={error_info['code']} "
-            f"detail={raw_error!r}"
+            f"detail={error_info['detail'] if hls_used else raw_error!r}"
         )
         return 1
 
     finally:
-        if deadline is not None:
-            deadline.set()
-        if hasattr(signal, "SIGALRM"):
-            try:
-                signal.alarm(0)
-            except Exception:
-                pass
         _cleanup_cookie_copy(cookiefile)
 
 if __name__ == "__main__":

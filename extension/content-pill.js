@@ -197,13 +197,13 @@
 
     const currentUrl = comparableMediaUrl(resolved.url);
 
-    if (comparableMediaUrl(state.active?.url) === currentUrl) {
+    if (comparableMediaUrl(state.active?.media_source?.page_url || state.active?.url) === currentUrl) {
       trackedJobId = state.active.id;
       return;
     }
 
     const queue = Array.isArray(state.queue) ? state.queue : [];
-    const matching = queue.find(job => comparableMediaUrl(job?.url) === currentUrl);
+    const matching = queue.find(job => comparableMediaUrl(job?.media_source?.page_url || job?.url) === currentUrl);
     if (matching) trackedJobId = matching.id;
   }
 

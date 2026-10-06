@@ -25,6 +25,7 @@ import worker
 for signum, handler in handlers.items():
     signal.signal(signum, handler)
 import image_download
+from hls import extract_job
 import queue_store
 import yt_dlp
 from yt_dlp.extractor.common import InfoExtractor
@@ -110,6 +111,13 @@ class ImageDownloadTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(yt_dlp, "YoutubeDL", FixtureYDL))
+        # This suite intentionally supplies an in-memory custom extractor.
+        # Supervised production extraction is exercised by the HLS/DASH suites;
+        # keep this synthetic metadata fixture in its original process.
+        def fixture_metadata(options, job, check_control=lambda: None, on_fallback=lambda source: None):
+            with FixtureYDL(options) as ydl:
+                return extract_job(ydl, job, check_control, on_fallback)
+        self.stack.enter_context(patch.object(worker, "extract_metadata", fixture_metadata))
         for name, value in {"QUEUE_FILE": self.root / "queue.json", "LOCK_FILE": self.root / "queue.lock",
                             "CONTROL_DIR": self.root / "controls", "AUTH_JOB_DIR": self.root / "auth",
                             "log": lambda *_args: None, "configure_worker_job": lambda: None,

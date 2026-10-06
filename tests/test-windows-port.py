@@ -146,6 +146,36 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual((self.root / "extension/manifest.json").read_text(), "ancien")
         self.assertEqual((self.root / "current.json").read_bytes(), b"ancien:current.json")
 
+    def test_stage_directory_lock_does_not_block_publication(self):
+        self.old_install()
+        stage = self.stage()
+        replace = installer.os.replace
+        def locked_stage(source, destination):
+            if Path(source) == stage:
+                raise PermissionError(13, "WinError 5: stage locked")
+            return replace(source, destination)
+        with patch.object(installer.os, "replace", side_effect=locked_stage):
+            version = installer.commit_install(self.root, stage, "8.31", register_host=False)
+        self.assertTrue(stage.exists())
+        self.assertEqual((version / "extension/manifest.json").read_bytes(), (stage / "extension/manifest.json").read_bytes())
+        self.assertEqual((self.root / "config/settings.json").read_bytes(), b"conserver")
+
+    def test_partial_payload_copy_failure_keeps_old_install_and_removes_new_version(self):
+        self.old_install()
+        stage = self.stage()
+        before = (self.root / "current.json").read_bytes()
+        def fail_copy(source, destination):
+            Path(destination).mkdir()
+            (Path(destination) / "partial.bin").write_bytes(b"partial")
+            raise OSError("disk full")
+        with patch.object(installer.shutil, "copytree", side_effect=fail_copy):
+            with self.assertRaises(OSError):
+                installer.commit_install(self.root, stage, "8.31", register_host=False)
+        self.assertEqual((self.root / "current.json").read_bytes(), before)
+        self.assertEqual((self.root / "extension/manifest.json").read_text(), "ancien")
+        self.assertEqual(list((self.root / "versions").iterdir()), [])
+        self.assertTrue(stage.exists())
+
     def test_partial_extension_copy_is_removed_on_failed_first_install(self):
         stage = self.stage()
         def broken_copy(source, destination):
@@ -223,7 +253,8 @@ class InstallerTests(unittest.TestCase):
 
     def test_windows_alive_never_uses_os_kill(self):
         fake = SimpleNamespace(pid_exists=lambda pid: pid == 123,
-                               Process=lambda pid: SimpleNamespace(is_running=lambda: True))
+                               Process=lambda pid: SimpleNamespace(is_running=lambda: True),
+                               NoSuchProcess=ProcessLookupError, AccessDenied=PermissionError)
         with patch.object(platform_api, "WINDOWS", True), patch.dict(sys.modules, {"psutil": fake}), \
              patch.object(os, "kill", side_effect=AssertionError("os.kill sous Windows")):
             self.assertTrue(platform_api.process_alive(123))
@@ -376,6 +407,7 @@ import worker, platform_support as api
 api.terminate_own_children=lambda: None
 worker.WINDOWS=True
 worker.configure_worker_job=lambda: None
+worker.install_ffmpeg_timeouts=lambda: None
 def watch(action_reader):
  previous=api.WINDOWS
  api.WINDOWS=True
@@ -389,6 +421,9 @@ class YDL:
  def extract_info(self, *args, **kwargs):
   while True: time.sleep(.05)
 sys.modules['yt_dlp']=types.SimpleNamespace(YoutubeDL=YDL)
+# Keep this IPC simulation's deliberately blocking metadata fixture local;
+# the real supervised process path is covered by HLS/DASH timeout tests.
+worker.extract_metadata=lambda options,job,*callbacks: YDL(options).extract_info()
 sys.argv=[str(worker.WORKER),sys.argv[2]]
 raise SystemExit(worker.main())
 '''
@@ -500,6 +535,39 @@ class YoutubeDL:
         size = struct.unpack("<I", result.stdout[:4])[0]
         self.assertEqual(size, len(result.stdout) - 4)
         self.assertTrue(json.loads(result.stdout[4:])["ok"])
+
+    def test_publish_with_real_windows_file_handle_denying_directory_rename(self):
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                      wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        kernel.CreateFileW.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        root = self.base / 'publish Français & 100% !'
+        root.mkdir()
+        for in_place in (False, True):
+            with self.subTest(in_place=in_place):
+                name = '8.45-' + uuid.uuid4().hex if in_place else 'stage-' + uuid.uuid4().hex
+                stage = root / 'versions' / name if in_place else root / name
+                stage.mkdir(parents=True)
+                payload = stage / 'locked-runtime.dll'
+                payload.write_bytes(b'fixture: loaded DLL / scanner handle')
+                # FILE_SHARE_READ | FILE_SHARE_WRITE, deliberately no DELETE.
+                handle = kernel.CreateFileW(str(payload), 0x80000000, 3, None, 3, 0x80, None)
+                if handle == ctypes.c_void_p(-1).value:
+                    raise ctypes.WinError(ctypes.get_last_error())
+                try:
+                    with self.assertRaises(PermissionError):
+                        os.replace(stage, root / 'rename-would-fail')
+                    version = installer.commit_install(root, stage, '8.45', register_host=False)
+                    self.assertEqual((version / payload.name).read_bytes(), payload.read_bytes())
+                    if in_place:
+                        self.assertEqual(version, stage)
+                    self.assertEqual(installer.checked_version_path(root, installer.current_install(root)), version)
+                finally:
+                    kernel.CloseHandle(handle)
 
     def test_real_windows_cancel_runs_cleanup_and_does_not_signal_linux_style(self):
         output = self.seed()

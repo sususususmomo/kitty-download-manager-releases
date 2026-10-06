@@ -1,218 +1,68 @@
-> Documentation de l’archive Windows v8.29 livrée séparément. Les sources
-> communes du présent ZIP macOS portent la version 8.31 et ont aussi été testées
-> sous Windows ; aucun nouveau ZIP Windows n’est livré ici.
+# Kitty Download Manager — backend 8.47 Windows x64
 
-# Kitty Download Manager V8.29 — Windows x64, version de test
-
-Cette distribution ajoute un installateur Windows à la base V8.24. Elle est
-destinée à Windows 10/11 x64 et à Firefox. L’installation ne nécessite ni Python
-préinstallé ni droits administrateur. Une connexion Internet est nécessaire.
+Windows 10/11 x64 et Firefox. Aucun Python préinstallé ni droit administrateur requis. Une connexion Internet est nécessaire pour préparer les dépendances.
 
 ## Installation
 
-1. Extraire `kitty-download-manager-v8.29-windows-x64.zip`.
-2. Ouvrir le dossier `kitty-download-manager`, puis double-cliquer sur `Install.cmd`.
-3. Attendre les téléchargements et les vérifications. En cas d’erreur, le message
-   reste visible dans la fenêtre; ne pas considérer l’installation comme réussie.
-4. Dans Firefox, ouvrir `about:debugging#/runtime/this-firefox`, choisir
-   **Charger un module complémentaire temporaire**, puis sélectionner :
-   `%LOCALAPPDATA%\KittyDownloadManager\extension\manifest.json`.
+1. Extraire `kitty-backend-v8.47-windows-x64.zip`.
+2. Dans le dossier extrait `kitty-download-manager`, double-cliquer sur `Install.cmd`.
+3. Saisir le dossier d’installation, par exemple `D:\KittyDownloadManager`, puis appuyer sur Entrée. Entrée sans texte conserve le dossier proposé.
+4. Attendre le message **Installation terminee**. Rouvrir Kitty dans Firefox et utiliser **Vérifier la connexion** dans les réglages.
 
-Le backend, Python, yt-dlp, Mutagen, psutil, FFmpeg/ffprobe et Deno sont installés
-dans **un seul dossier** : `%LOCALAPPDATA%\KittyDownloadManager`.
-Les réglages et l’historique sont dans ses sous-dossiers `config` et `cache`.
-Le dossier de téléchargement Windows peut avoir été déplacé : Kitty utilise
-l’emplacement fourni par Windows et propose ensuite son sous-dossier
-`kitty-download-manager`. Le dossier reste configurable dans la popup.
+La correction complète utilise le backend 8.47 et l’extension 8.53. L’archive backend seule ne contient pas l’extension. Avec l’archive complète v8.53, lancer Install.cmd puis charger ou recharger extension/manifest.json dans about:debugging → Ce Firefox.
 
-Les scripts Bash et le moteur de migration Linux présents dans les sources
-servent aux tests de compatibilité du projet; l’installateur Windows ne les
-exécute pas.
+## Session YouTube sous Windows
 
-### Commande complète — PowerShell sur Windows
+Le backend 8.47 retire le refus de Windows dans la configuration de session. Dans Kitty → Réglages → Cookies, cliquer sur Configurer YouTube. Une fenêtre Firefox dédiée utilise un profil temporaire et des dossiers USERPROFILE/APPDATA/LOCALAPPDATA séparés. Se connecter à YouTube, ouvrir youtube.com/robots.txt dans le même onglet, fermer cette fenêtre puis rouvrir Kitty. Kitty conserve uniquement les cookies du domaine YouTube et supprime le profil temporaire. La fenêtre Firefox habituelle peut rester ouverte.
 
-Cette commande réutilise le même dossier d’extraction dans Téléchargements.
-Elle remplace les sources extraites, pas le dossier installé ni les réglages.
+L’extension 8.53 conserve les erreurs de configuration à l’écran et réactive le bouton pour réessayer. Une ancienne réponse d’état ne peut plus effacer le résultat de la tentative. Un échec de renouvellement conserve la session précédente.
+
+Tests du correctif : cinq scénarios Python hors réseau et scénarios Node de réponses différées, erreurs et nouvelle tentative. Le lancement de Firefox est simulé ici ; l’ouverture et la connexion réelles sous Windows restent à vérifier. Voir docs/WINDOWS-YOUTUBE-SESSION-V8.47.md.
+
+Depuis le backend 8.46, l’installateur vérifie les imports YouTube, réseau et post-traitement, les empreintes des fichiers Python de yt-dlp, et l’origine privée des paquets. Ces contrôles ont lieu après pip puis avant l’activation du backend. Une installation incomplète est refusée avec un détail explicite.
+
+En cas de `No module named 'yt_dlp.postprocessor'`, relancer l’installation depuis cette archive pour préparer un nouveau runtime. `Diagnose.cmd` dans l’archive examine le backend actuellement enregistré, sans télécharger ni modifier les paquets, les cookies ou la file. Copier sa sortie si l’erreur persiste ; elle indique la version active, les chemins de chargement et les fichiers manquants/modifiés.
+
+Python privé, yt-dlp, Mutagen, psutil, FFmpeg/ffprobe, Deno, configuration et historique résident dans le dossier choisi. Le stage, le Python de préparation et les fichiers temporaires de pip restent sur ce disque. Les variables temporaires ne sont modifiées que pour le processus d’installation, puis restaurées.
+
+Le dossier choisi doit être dédié à Kitty, sur un disque local NTFS ou ReFS, avec au moins 2 Gio libres pour la préparation. Les dossiers non vides sans marqueur Kitty, les racines de disque et les chemins contenant une jonction ou un lien sont refusés avant la création des fichiers.
+
+Le dossier des vidéos/audio est un réglage indépendant : le dossier Téléchargements de Windows reste proposé par défaut. Avec C: plein, choisir aussi un dossier sur D: dans les réglages Kitty pour les prochains médias.
+
+## Commande avec dossier explicite
+
+Depuis le dossier extrait, dans PowerShell :
 
 ```powershell
-$downloads = (New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path
-Set-Location -LiteralPath $downloads
-$zip = 'kitty-download-manager-v8.29-windows-x64.zip'
-if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Archive absente de Téléchargements.' }
-if (Test-Path -LiteralPath '.\kitty-download-manager') { Remove-Item -LiteralPath '.\kitty-download-manager' -Recurse -Force }
-Expand-Archive -LiteralPath $zip -DestinationPath '.' -Force
-& '.\kitty-download-manager\Install.cmd'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -InstallDir 'D:\KittyDownloadManager'
 ```
 
-## Extension Firefox permanente
+`-NonInteractive` permet de réutiliser le dossier enregistré, ou le dossier par défaut, sans demande de saisie. Il est utilisé par la CI.
 
-Le fichier `kitty-download-manager-v8.29-unsigned.xpi` est fourni pour la
-soumission à Mozilla. **Il n’est pas signé** : Firefox standard ne permet pas
-son installation permanente en l’état. Le chargement temporaire ci-dessus
-fonctionne pour les essais, mais doit être refait après un redémarrage de Firefox.
+## Mise à jour et changement de disque
 
-Pour distribuer l’extension durablement, soumettre ce XPI sur le portail
-développeur Mozilla en distribution **non répertoriée**, puis utiliser le XPI
-signé qu’il retourne. La signature nécessite le compte Mozilla du propriétaire;
-aucun identifiant ni secret de signature n’est inclus dans ce paquet.
+Extraire la nouvelle archive dans un dossier distinct de l’installation, puis relancer `Install.cmd`. Le dossier déjà enregistré est proposé. La mise à jour sur place conserve les réglages et l’historique.
 
-Avant une première soumission AMO, compléter aussi la déclaration
-`browser_specific_settings.gecko.data_collection_permissions` selon le périmètre
-retenu pour l’extension et son backend natif. Elle est requise pour les nouvelles
-extensions. Le manifeste de cette version de test n’est donc pas présenté comme
-un paquet déjà prêt à être publié sur AMO.
+Depuis le backend 8.45, le nouveau runtime est préparé directement dans son dossier unique `versions/8.48-…`, sans renommer ce dossier après les vérifications. Le lanceur ne l’active qu’une fois le protocole Firefox validé. Cela retire l’opération `stage-… → versions/…` qui échouait avec `WinError 5`. En cas d’échec, l’ancien runtime reste actif et la file reste en pause.
 
-Procédure officielle :
-https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/
-https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
+En choisissant un autre dossier, l’installateur met en pause l’ancienne file, arrête les tâches selon les contrôles existants, copie configuration/cache et enregistre le nouveau backend pour Firefox. Les réglages, cookies et historique sont copiés. Les fichiers téléchargés restent à leur emplacement et le dossier de sortie configuré reste identique. La file reste en pause après l’installation : la reprendre dans Kitty.
 
-## Mise à jour et réparation
-
-Relancer `Install.cmd` depuis une nouvelle distribution Windows. Les dépendances
-sont préparées et vérifiées avant la bascule; les réglages et l’historique sont
-conservés. Le worker actif reçoit une demande d’arrêt et garde ses fichiers
-partiels. La file est mise en pause; la reprendre depuis Kitty après avoir
-rechargé l’extension. Un backend qui ne s’arrête pas bloque la mise à jour.
-
-Les exécutables d’une version précédente restent dans `versions` pour éviter
-de supprimer une version encore utilisée par Firefox. Toutes ces versions
-restent dans le même dossier Kitty. Les téléchargements terminés sont conservés.
-
-La popup recherche les assets GitHub nommés
-`kitty-download-manager-v<VERSION>-windows-x64.zip` sous Windows. Une archive
-Linux portant seulement `kitty-download-manager-v<VERSION>.zip` n’est pas
-sélectionnée par le backend Windows. Le bouton télécharge l’archive vérifiée;
-il faut encore l’extraire et lancer l’installateur.
+L’ancien dossier est conservé après le changement de disque. Si la copie, la validation du backend ou l’enregistrement échoue, l’ancien backend reste enregistré et les copies nouvelles sont retirées. Un déplacement vers un dossier avec des données Kitty existantes est refusé pour éviter leur écrasement.
 
 ## Désinstallation
 
-Utiliser **Applications installées → Kitty Download Manager → Désinstaller**,
-ou `%LOCALAPPDATA%\KittyDownloadManager\Uninstall.cmd`.
+Utiliser Applications installées → Kitty Download Manager → Désinstaller, ou `Uninstall.cmd` dans le dossier choisi. Les réglages, l’historique, les téléchargements et le marqueur d’emplacement sont conservés.
 
-La désinstallation arrête le worker, retire l’enregistrement Firefox et le
-backend. **Réglages, historique et téléchargements sont conservés**. Un helper
-attend la fin du processus avant d’effacer les exécutables, car Windows peut
-verrouiller les fichiers d’un programme en cours d’exécution.
+## Audit Windows 8.48 / extension 8.54
 
-## Validation et limites
+Cette version vérifie l’API et l’intégrité de psutil, protège les réglages simultanés, gère les conflits de partage de fichiers Windows et les chemins contenant `%`, et stabilise la configuration/suppression des sessions YouTube et leurs erreurs dans la popup. Réinstaller avec `Install.cmd` pour remplacer les dépendances privées puis recharger l’extension 8.54.
 
-Les vérifications exécutées ici sont détaillées dans `tests/VALIDATION-WINDOWS.txt`.
-Les tests portables et les régressions sur Linux passent. L’utilisateur a
-confirmé un passage GitHub Actions Windows entièrement vert pour la V8.27.
-Le sélecteur de dossier et l’utilisation interactive sur un bureau Windows
-restent à essayer. Cette distribution reste une **version de test**.
+Les tests locaux et simulations ont réussi. La CI sur les deux Windows dédiés est préparée mais n’a pas été exécutée : l’autorisation d’envoyer le commit GitHub reste nécessaire. Consulter `docs/WINDOWS-AUDIT-V8.48.md` dans l’archive complète pour chaque problème, les scénarios, les preuves disponibles et les limites.
 
-La validation automatisée Windows est préparée dans
-`.github/workflows/windows-validation.yml`. Elle couvre les vrais verrous
-interprocessus, le protocole binaire, l’annulation, l’arrêt, la survie du worker
-après fermeture du job parent, puis l’installation complète, la mise à jour,
-le remux audio et la désinstallation.
+## Validations historiques
 
-Le premier passage GitHub Actions de la V8.25 a réussi 26 tests Windows,
-ignoré les 2 simulations POSIX, puis échoué sur le lancement des workers dans
-les 2 tests d’annulation et d’arrêt (`WinError 5`). La V8.26 a préparé un Job
-intermédiaire autorisant leur détachement depuis le contexte du runner.
+Validation de la correction 8.45 exécutée sur Linux : 12 tests de dossier/migration/rollback et 30 tests portables Windows réussis, ainsi que 3 tests de packaging/installation Linux. Cinq tests natifs Windows sont ignorés ici. Les 95 contrôles de régression avaient réussi lors de la correction précédente 8.44.
 
-Le passage V8.26 a atteint l’installation complète : Python privé, yt-dlp,
-FFmpeg, Deno et le protocole natif direct ont été vérifiés. Le remux WebM vers
-Opus a réussi. Les vérifications via le lanceur batch ont échoué car le test
-suréchappait les guillemets pour CMD. La désinstallation échouait en supprimant
-deux fois une clé HKCU partagée entre les vues 32 et 64 bits du registre.
+La validation native PowerShell et la vraie installation Windows ne sont pas exécutables dans cet environnement. Le workflow `.github/workflows/windows-validation.yml` inclut la validation des chemins en PowerShell 5.1, une installation dans un dossier distinct de LOCALAPPDATA contenant espaces et caractères spéciaux, une réinstallation dans un dossier de version définitif et un test avec un vrai handle Win32 qui bloque le renommage. Ce workflow reste à lancer pour cette modification. Voir `docs/WINDOWS-REINSTALL-V8.46.md` dans l’archive complète.
 
-La V8.27 lance le batch par son nom fixe depuis son dossier, corrige la
-suppression des vues partagées et vérifie que les fichiers de runtime sont
-réellement effacés après la sortie du désinstalleur. Les refus d’accès restent
-bloquants et provoquent la restauration du registre. La sortie de l’installateur
-est en UTF-8 et la CI affiche une trace complète sur erreur.
-
-La V8.27 a ensuite passé le workflow Windows au vert, selon la confirmation
-de l’utilisateur. Le journal V8.28 fourni par l’utilisateur confirme six captures Windows
-réussies. La septième a échoué sur une attente exigeant uniquement l’état
-vert des dépendances. La V8.29 corrige cette attente; son passage Windows
-reste à lancer.
-
-```powershell
-python -m pip install psutil
-python tests/test-windows-port.py
-```
-
-`tests/test-installed-windows.py` est réservé à une installation CI neuve : il
-désinstalle Kitty à la fin et exige explicitement `KITTY_INSTALLED_TEST=1`.
-
-## Voir Kitty sur Windows sans machine Windows
-
-La V8.28 ajoute le job **Firefox Windows — captures de Kitty**. Il installe
-Firefox officiel et Kitty sur le Windows de GitHub Actions, charge la vraie
-popup dans un profil Firefox temporaire et vérifie la communication native.
-Aucune VM ni installation Windows ne tourne sur ton PC.
-
-Après avoir poussé les sources sur ta branche habituelle :
-
-1. Ouvrir **Actions**, puis le dernier lancement **Kitty Windows validation**.
-2. Attendre la fin du job **Firefox Windows — captures de Kitty**.
-3. Au bas de la page du lancement, dans **Artifacts**, télécharger
-   **kitty-windows-firefox-captures**.
-4. Extraire les fichiers puis ouvrir **index.html**, ou directement les PNG.
-
-Les sept images montrent le principal vide, le dernier téléchargement terminé,
-la file ouverte, son bas après défilement, l’historique, les réglages repliés et
-les dépendances. Les éléments affichés sont signalés **Exemple CI**. La file
-reste en pause, aucune vidéo réseau n’est téléchargée. Le backend et les
-réponses Native Messaging sont réels; les fichiers de la popup ne sont pas
-remplacés par un rendu factice. La page de pilotage n’est pas dans le XPI distribué.
-
-Les captures sont faites en mode headless par Gecko sur Windows. Elles
-représentent des états stabilisés et ne mesurent pas les flashs très brefs ni
-les dialogues Windows. Le rapport JSON contient les versions réellement
-utilisées. Le job est séparé des tests d’installation déjà validés. Les images
-partielles et journaux sont récupérables même si une capture échoue; l’artefact
-expire après 14 jours.
-
-### Commande complète — fish pour ta branche GitHub existante
-
-Télécharger l’archive dans `~/Downloads`, puis exécuter :
-
-```fish
-cd ~/Downloads
-and test -f kitty-download-manager-v8.29-windows-x64.zip
-and test -d kitty-download-manager/.git
-and unzip -o kitty-download-manager-v8.29-windows-x64.zip
-and cd kitty-download-manager
-and rm -f -- kitty-download-manager-v8.28-unsigned.xpi
-and set kitty_login (gh api user --jq '.login')
-and set kitty_account_id (gh api user --jq '.id')
-and git add .
-and git -c user.name="$kitty_login" \
-    -c user.email="$kitty_account_id+$kitty_login@users.noreply.github.com" \
-    -c commit.gpgsign=false \
-    commit -m "Corrige l attente du diagnostic Firefox Windows v8.29"
-and git push
-```
-
-Cette commande conserve le même dossier et son dépôt Git. Le push relance
-Actions sur la branche en cours.
-
-La V8.29 attend un diagnostic terminé, y compris avec avertissement ou erreur,
-au lieu d’exiger une couleur verte. Elle attend aussi la fin de la requête et
-la liste des dépendances, centre la dernière capture sur ce groupe et conserve
-le diagnostic natif complet dans `rapport.json`. Un problème de dépendance
-requise, de runtime ou de communication native reste un échec explicite après
-la capture. Un dossier de destination encore absent est présenté tel quel.
-Les attentes qui échouent ajoutent le dernier état de la popup au rapport et
-au journal. Cinq tests couvrent ces cas sur Linux et dans le job visuel Windows.
-
-## Références techniques vérifiées le 3 octobre 2026
-
-- Firefox Native Messaging, registre et survie des sous-processus :
-  https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging
-- Emplacement du manifeste Windows :
-  https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_manifests
-- Python embarqué 3.13.16 et SHA-256 officiel :
-  https://www.python.org/ftp/python/3.13.16/windows-3.13.16.json
-- Création de processus et arrêt sous Windows :
-  https://docs.python.org/3/library/subprocess.html
-- Verrous Windows : https://docs.python.org/3/library/msvcrt.html
-- Jobs Windows et propriété des sous-processus :
-  https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
-- Dossier Téléchargements Windows :
-  https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid
+Validation 8.46 : 7 tests des paquets/imports et erreurs structurées, 12 tests d’installation, 6 tests des limites de durée et 95 contrôles de régression réussis. La vraie installation Windows et le diagnostic PowerShell restent à exécuter sur Windows. Voir `docs/WINDOWS-RUNTIME-V8.46.md`.

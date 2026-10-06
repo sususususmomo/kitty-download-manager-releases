@@ -44,6 +44,35 @@
       error_hint: "Mets à jour le backend depuis les réglages, puis rouvre Kitty."};
   }
 
+  function supportsHls(compatibility) {
+    const parts = String(compatibility?.backend_version || "").split(".").map(Number);
+    return parts.length >= 2 && parts.every(Number.isFinite)
+      && (parts[0] > 8 || (parts[0] === 8 && parts[1] >= 33));
+  }
+
+  function supportsDash(compatibility) {
+    const parts = String(compatibility?.backend_version || "").split(".").map(Number);
+    return parts.length >= 2 && parts.every(Number.isFinite)
+      && (parts[0] > 8 || (parts[0] === 8 && parts[1] >= 34));
+  }
+
+  function supportsDirect(compatibility) {
+    const parts = String(compatibility?.backend_version || '').split('.').map(Number);
+    return parts.length >= 2 && parts.every(Number.isFinite)
+      && (parts[0]>8 || (parts[0]===8 && parts[1]>=35));
+  }
+
+  function supportsAutomatic(compatibility) {
+    const parts = String(compatibility?.backend_version || '').split('.').map(Number);
+    return parts.length >= 2 && parts.every(Number.isFinite)
+      && (parts[0]>8 || (parts[0]===8 && parts[1]>=36));
+  }
+
+  function mediaLabel(source) {
+    return source?.type === 'direct_video' ? 'Vidéo directe'
+      : source?.type === 'direct_audio' ? 'Audio direct' : (source?.type || 'hls').toUpperCase();
+  }
+
   function sourceInfo(url) {
     try {
       const u = new URL(url);
@@ -254,6 +283,23 @@
     STATE_UI,
     modeLabel,
     downloadModeError,
+    supportsHls,
+    supportsDash,
+    supportsDirect,
+    supportsAutomatic,
+    supportsRequestContext:comp=>{
+      const parts=String(comp?.backend_version || '').split('.').map(Number);
+      return Boolean(comp?.compatible && parts.length>=2 && parts.every(Number.isFinite) && (parts[0]>8 || parts[0]===8&&parts[1]>=40));
+    },
+    supportsMediaItems:comp=>{
+      const parts=String(comp?.backend_version || '').split('.').map(Number);
+      return Boolean(comp?.compatible && parts.length>=2 && parts.every(Number.isFinite) && (parts[0]>8 || parts[0]===8&&parts[1]>=39));
+    },
+    supportsMediaTracks:comp=>{
+      const parts=String(comp?.backend_version || '').split('.').map(Number);
+      return Boolean(comp?.compatible && parts.length>=2 && parts.every(Number.isFinite) && (parts[0]>8 || parts[0]===8&&parts[1]>=42));
+    },
+    mediaLabel,
     sourceInfo,
     sourceIconElement,
     jobPhase,

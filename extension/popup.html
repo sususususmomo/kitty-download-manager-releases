@@ -1473,6 +1473,33 @@
       opacity: .30;
     }
 
+    .mediaItemsPanel {margin:8px 0 10px;font-size:11px;color:var(--muted);}
+    .mediaCount {padding:5px 9px;font-size:11px;}
+    .mediaSingle {display:flex;align-items:center;gap:9px;}
+    .mediaSingle[hidden] {display:none;}
+    .mediaSingle span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .mediaThumbnail {width:58px;height:38px;object-fit:cover;border-radius:5px;flex-shrink:0;background:rgba(74,163,223,.12);}
+    .mediaThumbnail.missing {visibility:hidden;}
+    .mediaRows {max-height:240px;overflow:auto;margin-top:6px;}
+    .mediaRow {display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+    .mediaChoose {display:flex;align-items:center;gap:9px;text-align:left;width:100%;padding:6px;border:1px solid transparent;border-radius:7px;background:rgba(255,255,255,.03);color:var(--text);font:inherit;min-width:0;}
+    .mediaChoose[aria-pressed="true"] {border-color:rgba(74,163,223,.5);}
+    .mediaInfo {display:flex;flex-direction:column;min-width:0;gap:3px;}
+    .mediaTitle {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .mediaInfo small {color:var(--muted);font-size:10px;}
+    .mediaToolbar {display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:6px;font-size:10px;}
+    .mediaToolbar button {font-size:10px;padding:4px 6px;}
+    .mediaBatch {width:100%;margin-top:6px;padding:6px;font-size:11px;}
+    .mediaTracks {margin-top:8px;display:grid;gap:5px;}
+    .mediaTracks[hidden] {display:none;}
+    .mediaTracks label {display:flex;align-items:center;gap:6px;font-size:11px;}
+    .mediaTracks select {flex:1;min-width:0;padding:4px;font-size:11px;}
+    .mediaTracks summary {cursor:pointer;}
+    .hlsPanel {margin:8px 0 10px; font-size:11px; color:var(--muted);}
+    .hlsPanel label {display:block; margin-bottom:4px;}
+    .hlsPanel select {width:100%; border:1px solid rgba(255,255,255,.12); border-radius:8px;
+      background:#151b27; color:#e7edf7; padding:7px; font:inherit;}
+    .hlsDetail {margin-top:4px; font-size:10px; overflow-wrap:anywhere;}
   </style>
 </head>
 <body aria-busy="true">
@@ -1533,6 +1560,23 @@
         <span class="modeCheck">✓</span>
       </button>
     </div>
+  </div>
+
+  <div id="mediaItemsPanel" class="mediaItemsPanel" hidden>
+    <div id="mediaSingle" class="mediaSingle" hidden></div>
+    <div id="mediaTracks" class="mediaTracks" hidden></div>
+    <button id="mediaCount" class="ghost mediaCount" type="button" aria-expanded="false" aria-controls="mediaDrawer" hidden></button>
+    <div id="mediaDrawer" hidden>
+      <div class="mediaToolbar"><span>Automatique · meilleure source</span><button id="mediaSelectAll" class="ghost" type="button">Tout sélectionner</button></div>
+      <div id="mediaRows" class="mediaRows"></div>
+      <button id="mediaBatch" class="ghost mediaBatch" type="button" disabled>Ajouter la sélection</button>
+    </div>
+  </div>
+
+  <div id="hlsPanel" class="hlsPanel" hidden>
+    <label for="hlsSource">Source du téléchargement</label>
+    <select id="hlsSource" aria-label="Source du téléchargement"></select>
+    <div id="hlsDetail" class="hlsDetail" role="status"></div>
   </div>
 
   <div id="playlistPanel" class="playlistPanel" hidden>
@@ -1852,6 +1896,8 @@
   <script src="i18n.js"></script>
   <script src="shared.js"></script>
   <script src="backend-installer.js"></script>
+  <script src="popup-items.js"></script>
+  <script src="popup-hls.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

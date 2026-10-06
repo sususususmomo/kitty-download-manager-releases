@@ -2,6 +2,7 @@
 """Identity and filesystem layout for Kitty Download Manager."""
 from pathlib import Path
 import os
+import re
 import sys
 
 WINDOWS = sys.platform == "win32"
@@ -10,8 +11,39 @@ MACOS = sys.platform == "darwin"
 def macos_root():
     return Path.home() / "Library" / "Application Support" / "KittyDownloadManager"
 
+def windows_runtime_root(module_file=None):
+    """Resolve the owning installation even before a stage is published."""
+    backend = Path(module_file or __file__).resolve().parent
+    version = backend.parent
+    if backend.name != "backend":
+        return None
+    if version.parent.name == "versions" and re.fullmatch(r"[0-9.]+-[0-9a-f]{32}", version.name):
+        return version.parent.parent
+    if re.fullmatch(r"stage-[0-9a-f]{32}", version.name):
+        return version.parent
+    return None
+
+
+def windows_registered_root():
+    if not WINDOWS:
+        return None
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Uninstall\KittyDownloadManager",
+                            0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+            value = winreg.QueryValueEx(key, "InstallLocation")[0]
+    except FileNotFoundError:
+        return None
+    root = Path(value)
+    if not root.is_absolute() or root == Path(root.anchor):
+        raise RuntimeError("Dossier Kitty enregistre invalide.")
+    return root
+
+
 def windows_root():
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "KittyDownloadManager"
+    return (windows_runtime_root() or windows_registered_root() or
+            Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "KittyDownloadManager")
 
 APP_NAME = "Kitty Download Manager"
 APP_SLUG = "kitty-download-manager"

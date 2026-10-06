@@ -7,7 +7,7 @@ corruption recovery are explicit host-only exceptions to read-only access.
 from __future__ import annotations
 
 import copy
-from platform_support import acquire_file_lock, release_file_lock
+from platform_support import acquire_file_lock, release_file_lock, replace_file
 import json
 import os
 import shutil
@@ -99,7 +99,7 @@ def atomic_json(path, data):
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp, path)
+        replace_file(temp, path)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -122,7 +122,7 @@ def backup_state_file(queue_file, directory, reason, version=None, move=False):
     target = directory / (f"queue-{reason}{version_part}-"
                           f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex}.json")
     if move:
-        os.replace(path, target)
+        replace_file(path, target)
     else:
         shutil.copy2(path, target)
     os.chmod(target, 0o600)

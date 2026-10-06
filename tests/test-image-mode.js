@@ -7,7 +7,7 @@ let listener;
 let backendVersion='8.32';
 const calls=[];
 const saved={selectedMode:'mp3',imageOnlyMode:true};
-const context=vm.createContext({URL,browser:{
+const context=vm.createContext({setTimeout:()=>1,URL,browser:{
   runtime:{getManifest:()=>({version:'8.38'}),onMessage:{addListener:fn=>{listener=fn;}},
     sendNativeMessage:async(_host,payload)=>{
       calls.push(payload);

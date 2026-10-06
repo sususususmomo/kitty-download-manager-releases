@@ -15,6 +15,38 @@ MACOS = sys.platform == "darwin"
 _worker_job_handle = None
 
 
+class ProcessSupportError(RuntimeError):
+    code = "process_support_invalid"
+
+
+class ProcessAccessError(RuntimeError):
+    code = "process_access_denied"
+
+
+def require_psutil(*names):
+    """Never mistake an invalid process library for a dead worker/browser."""
+    try:
+        import psutil
+        missing = [name for name in names if not callable(getattr(psutil, name, None))]
+        if missing:
+            raise AttributeError("API absente : " + ", ".join(missing))
+        return psutil
+    except (ImportError, AttributeError) as exc:
+        raise ProcessSupportError(f"Support des processus psutil invalide : {exc}. Réinstalle le backend Kitty.") from exc
+
+
+def replace_file(source, destination):
+    """Retry transient Windows sharing conflicts without deleting the old file."""
+    for attempt in range(8):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            if not WINDOWS or getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 7:
+                raise
+            time.sleep(0.02 * (attempt + 1))
+
+
 def open_url(request, **kwargs):
     from urllib.request import urlopen
     if MACOS and "context" not in kwargs:
@@ -56,17 +88,26 @@ def release_file_lock(handle):
 
 
 def process_alive(pid):
+    psutil = require_psutil("pid_exists", "Process", "NoSuchProcess", "AccessDenied") if WINDOWS or MACOS else None
+    if psutil is not None:
+        try:
+            pid = int(pid)
+            if pid <= 1:
+                return False
+            if WINDOWS:
+                return psutil.pid_exists(pid) and psutil.Process(pid).is_running()
+            proc = psutil.Process(pid)
+            return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
+        except (ValueError, TypeError, psutil.NoSuchProcess):
+            return False
+        except psutil.AccessDenied as exc:
+            raise ProcessAccessError("Kitty ne peut pas vérifier ce processus : accès refusé par le système.") from exc
+        except Exception as exc:
+            raise ProcessSupportError(f"Support des processus psutil invalide : {exc}. Réinstalle le backend Kitty.") from exc
     try:
         pid = int(pid)
         if pid <= 1:
             return False
-        if WINDOWS:
-            import psutil
-            return psutil.pid_exists(pid) and psutil.Process(pid).is_running()
-        if MACOS:
-            import psutil
-            proc = psutil.Process(pid)
-            return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
         os.kill(pid, 0)
         return True
     except (OSError, ValueError, TypeError):
@@ -76,10 +117,17 @@ def process_alive(pid):
 
 
 def process_args(pid):
-    try:
-        if WINDOWS or MACOS:
-            import psutil
+    psutil = require_psutil("Process", "NoSuchProcess", "AccessDenied") if WINDOWS or MACOS else None
+    if psutil is not None:
+        try:
             return psutil.Process(int(pid)).cmdline()
+        except (ValueError, TypeError, psutil.NoSuchProcess):
+            return []
+        except psutil.AccessDenied as exc:
+            raise ProcessAccessError("Kitty ne peut pas vérifier l'identité de ce processus : accès refusé par le système.") from exc
+        except Exception as exc:
+            raise ProcessSupportError(f"Support des processus psutil invalide : {exc}. Réinstalle le backend Kitty.") from exc
+    try:
         raw = Path(f"/proc/{int(pid)}/cmdline").read_bytes()
         return [p.decode("utf-8", "replace") for p in raw.split(b"\0") if p]
     except Exception:
@@ -183,17 +231,25 @@ def find_firefox():
 def firefox_uses_profile(profile):
     if not (WINDOWS or MACOS):
         return False
-    import psutil
+    psutil = require_psutil("process_iter", "NoSuchProcess", "AccessDenied")
+    unknown = False
     for proc in psutil.process_iter(["name", "cmdline"]):
         try:
-            args = proc.info["cmdline"] or []
             if str(proc.info["name"] or "").lower() not in ("firefox.exe", "firefox", "firefox-bin"):
+                continue
+            args = proc.info["cmdline"]
+            if args is None:
+                unknown = True
                 continue
             for i, arg in enumerate(args[:-1]):
                 if arg.lower() in ("-profile", "--profile") and same_path(args[i + 1], profile):
                     return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except psutil.NoSuchProcess:
             continue
+        except psutil.AccessDenied:
+            unknown = True
+    if unknown:
+        raise ProcessAccessError("Impossible de vérifier la fermeture de Firefox : accès aux processus refusé. Ferme la fenêtre dédiée puis réessaie.")
     return False
 
 
@@ -287,7 +343,7 @@ def configure_worker_job():
 
 
 def terminate_own_children():
-    import psutil
+    psutil = require_psutil("Process", "wait_procs", "NoSuchProcess", "AccessDenied")
     # A successor worker can already have been launched. Never terminate Python
     # children; only the external tools belonging to this runtime are stopped.
     bin_dir = (Path(__file__).resolve().parent.parent / "bin" if MACOS else
@@ -326,9 +382,11 @@ def watch_worker_controls(action_reader):
         while not done.wait(0.1):
             if action_reader() not in ("cancel", "stop"):
                 continue
-            terminate_own_children()
-            if not done.is_set() and action_reader() in ("cancel", "stop"):
-                _thread.interrupt_main(signal.SIGTERM)
+            try:
+                terminate_own_children()
+            finally:
+                if not done.is_set() and action_reader() in ("cancel", "stop"):
+                    _thread.interrupt_main(signal.SIGTERM)
             return
     threading.Thread(target=watch, daemon=True, name="kitty-control").start()
     return done
@@ -357,8 +415,10 @@ def metadata_deadline(seconds=30):
     done = threading.Event()
     def expire():
         if not done.wait(seconds):
-            terminate_own_children()
-            if not done.is_set():
-                _thread.interrupt_main(signal.SIGINT)
+            try:
+                terminate_own_children()
+            finally:
+                if not done.is_set():
+                    _thread.interrupt_main(signal.SIGINT)
     threading.Thread(target=expire, daemon=True, name="kitty-metadata-deadline").start()
     return done

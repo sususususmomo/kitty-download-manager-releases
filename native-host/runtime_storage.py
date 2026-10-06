@@ -5,6 +5,7 @@ This module deliberately knows nothing about download destinations.  Every
 operation is confined to Kitty's private cache directory.
 """
 from __future__ import annotations
+from platform_support import replace_file
 
 from platform_support import acquire_file_lock, release_file_lock
 import os
@@ -123,12 +124,12 @@ def _rotate_locked(incoming_bytes: int = 0) -> bool:
                 if src.is_symlink():
                     src.unlink()
                 elif src.is_file():
-                    os.replace(src, dst)
+                    replace_file(src, dst)
             except Exception:
                 pass
 
         if LOG_FILE.is_file() and not LOG_FILE.is_symlink():
-            os.replace(LOG_FILE, LOG_FILE.with_name(f"{LOG_FILE.name}.1"))
+            replace_file(LOG_FILE, LOG_FILE.with_name(f"{LOG_FILE.name}.1"))
         return True
     except Exception:
         return False

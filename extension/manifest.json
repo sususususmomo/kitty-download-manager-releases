@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Kitty Download Manager",
-  "version": "8.38",
-  "description": "Gestionnaire de téléchargements multimédia persistant basé sur yt-dlp.",
+  "version": "8.54",
+  "description": "Gestionnaire de t\u00e9l\u00e9chargements multim\u00e9dia persistant bas\u00e9 sur yt-dlp.",
   "permissions": [
     "activeTab",
     "menus",
     "nativeMessaging",
     "storage",
-    "clipboardWrite"
+    "clipboardWrite",
+    "webRequest",
+    "webRequestBlocking",
+    "webRequestFilterResponse"
   ],
   "action": {
     "default_title": "Kitty Download Manager",
@@ -37,6 +40,12 @@
   "background": {
     "scripts": [
       "shared.js",
+      "media-resolver.js",
+      "hls-parser.js",
+      "request-context.js",
+      "hls-detector.js",
+      "hls-response.js",
+      "media-items.js",
       "background.js"
     ]
   },
@@ -53,6 +62,22 @@
         "content-pill.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "media-dom.js",
+        "media-context.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ]
 }

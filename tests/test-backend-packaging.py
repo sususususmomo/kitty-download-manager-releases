@@ -26,6 +26,13 @@ class BackendPackagingTests(unittest.TestCase):
                 self.assertFalse((source / "extension").exists())
                 self.assertEqual(installer_support.source_backend_version(source), json.loads((ROOT / "backend.json").read_text())["version"])
                 self.assertTrue((source / "native-host/image_download.py").is_file())
+                self.assertTrue((source / "native-host/hls.py").is_file())
+                self.assertTrue((source / "native-host/direct_media.py").is_file())
+                self.assertTrue((source / "native-host/metadata_guard.py").is_file())
+                self.assertTrue((source / "native-host/download_planner.py").is_file())
+                self.assertTrue((source / "native-host/media_item.py").is_file())
+                self.assertTrue((source / "native-host/media_tracks.py").is_file())
+                self.assertTrue((source / "native-host/runtime_check.py").is_file())
                 self.assertTrue((source / "LICENSE").is_file())
                 self.assertEqual(maintenance._source_release_info(source)["protocol"], 1)
 
@@ -50,6 +57,11 @@ class BackendPackagingTests(unittest.TestCase):
                                         capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue((home / ".mozilla/native-messaging-hosts/com.kitty.download_manager.json").is_file())
+            self.assertTrue((home / ".local/lib/kitty-download-manager/metadata_guard.py").is_file())
+            self.assertTrue((home / ".local/lib/kitty-download-manager/direct_media.py").is_file())
+            self.assertTrue((home / ".local/lib/kitty-download-manager/download_planner.py").is_file())
+            self.assertTrue((home / ".local/lib/kitty-download-manager/media_item.py").is_file())
+            self.assertTrue((home / ".local/lib/kitty-download-manager/media_tracks.py").is_file())
 
 
 if __name__ == "__main__":

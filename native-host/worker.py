@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from platform_support import replace_file
+from request_context import youtube_dl
 import json
 import os
 import shutil
@@ -18,7 +20,11 @@ from platform_support import (WINDOWS, MACOS, terminate_own_children, process_al
                               run_hidden, find_firefox, firefox_uses_profile, choose_windows_folder,
                               configure_worker_job, watch_worker_controls)
 from errors import classify_backend_error
+from hls import apply_options as hls_options, error_info as hls_error_info, network_resource_ids
+from metadata_guard import extract_metadata, install_ffmpeg_timeouts, MetadataError, FFPROBE_TIMEOUT, FFMPEG_TIMEOUT
+from download_planner import resolve_candidates, can_runtime_fallback, build_item_plan, candidate_from_info, DownloadRequest
 from runtime_storage import append_log
+from media_item import apply_item_metadata, trace_item, trace_url
 from image_download import download_image, image_thumbnails
 from queue_store import (STATE_VERSION, default_state, read_state, mutate_state,
                          claim_next_job, update_job, insert_at_lane_head, release_failed_start)
@@ -228,7 +234,7 @@ def output_template_for_stem(output_dir, stem):
     le titre ne soit pas interprété comme une nouvelle expression outtmpl.
     """
     escaped = stem.replace("%", "%%")
-    return str(output_dir / f"{escaped}.%(ext)s")
+    return str(output_dir).replace("%", "%%") + os.sep + f"{escaped}.%(ext)s"
 
 
 def cleanup_cancelled_files(paths, output_stem, started_at):
@@ -392,10 +398,24 @@ def finish_active(status, error=None, filepath=None, error_info=None):
         active.pop("pause_requested", None)
         if filepath:
             active["filepath"] = filepath
+        if status != "error":
+            active.pop("hls_fallbacks", None)
+            active.pop("media_fallbacks", None)
+            if active.get("media_source"):
+                active["media_source"] = {**active["media_source"], "headers": {}, "request_context": None}
+                if active['media_source'].get('variants'):
+                    active['media_source']['variants']=[{**v,'headers':{},'request_context':None} for v in active['media_source']['variants']]
         data.setdefault("history", []).insert(0, dict(active))
         data["history"] = data["history"][:50]
         data["active"] = None
     locked_mutate(mutate)
+
+
+def run_media_tool(command, **kwargs):
+    try:
+        return run_hidden(command, **kwargs)
+    except subprocess.TimeoutExpired:
+        raise MetadataError('processing_timeout', 'Traitement FFmpeg trop long') from None
 
 
 def probe_audio_codec(path):
@@ -403,7 +423,7 @@ def probe_audio_codec(path):
     if not ffprobe:
         raise RuntimeError("ffprobe est requis pour détecter le codec audio.")
 
-    proc = run_hidden(
+    proc = run_media_tool(
         [
             ffprobe,
             "-v", "error",
@@ -416,6 +436,7 @@ def probe_audio_codec(path):
         stderr=subprocess.PIPE,
         text=True,
         check=False,
+        timeout=FFPROBE_TIMEOUT,
     )
 
     if proc.returncode != 0:
@@ -475,12 +496,13 @@ def remux_original_audio(path):
         str(temp),
     ]
 
-    proc = run_hidden(
+    proc = run_media_tool(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         check=False,
+        timeout=FFMPEG_TIMEOUT,
     )
     if proc.returncode != 0:
         try:
@@ -492,7 +514,7 @@ def remux_original_audio(path):
             f"{proc.stderr.strip()}"
         )
 
-    os.replace(temp, dst)
+    replace_file(temp, dst)
     if src != dst:
         try:
             src.unlink()
@@ -619,7 +641,7 @@ def probe_media_streams(path):
             return False, False
         return None, None
 
-    proc = run_hidden(
+    proc = run_media_tool(
         [
             ffprobe,
             "-v", "error",
@@ -631,6 +653,7 @@ def probe_media_streams(path):
         stderr=subprocess.PIPE,
         text=True,
         check=False,
+        timeout=FFPROBE_TIMEOUT,
     )
 
     if proc.returncode != 0:
@@ -801,6 +824,8 @@ def validate_extracted_info(info, mode):
         return
 
     if mode in ("audio", "mp3"):
+        if any(fmt.get('vcodec') == 'none' and fmt.get('acodec') != 'none' for fmt in formats):
+            return  # External HLS audio can have a confirmed type, unknown codec.
         explicit_audio = [
             str(fmt.get("acodec")).lower()
             for fmt in formats
@@ -846,7 +871,7 @@ def cleanup_failed_auxiliary_files(output_stem, started_at):
 
 def build_opts(mode, progress_hook, output_dir, cookiefile=None):
     title_limit = min(200, output_stem_budget(output_dir)) if WINDOWS else 200
-    template = str(output_dir / f"%(title).{title_limit}s.%(ext)s")
+    template = str(output_dir).replace("%", "%%") + os.sep + f"%(title).{title_limit}s.%(ext)s"
     opts = {
         "noplaylist": True,
         "windowsfilenames": WINDOWS,
@@ -904,7 +929,7 @@ def build_opts(mode, progress_hook, output_dir, cookiefile=None):
 def main():
     global current_job_id
 
-    log(f"worker V8.32 lancé pid={os.getpid()} argv={sys.argv[1:]}")
+    log(f"worker V8.48 lancé pid={os.getpid()} argv={sys.argv[1:]}")
     if len(sys.argv) != 2:
         return 2
 
@@ -913,7 +938,7 @@ def main():
     state = get_state()
     active = state.get("active")
     if not active or active.get("id") != job_id:
-        log(f"job actif introuvable ou différent: demandé={job_id} active={active!r}")
+        log(f"job actif introuvable ou différent: demandé={job_id} active_id={active.get('id') if isinstance(active, dict) else None!r}")
         return 3
 
     url = active["url"]
@@ -927,6 +952,8 @@ def main():
     last_pause_check = 0.0
     job_cookiefile = None
     control_watcher = None
+    hls_used = bool(active.get("media_source"))
+    selected_source = active.get("media_source")
 
     try:
         configure_worker_job()
@@ -944,17 +971,20 @@ def main():
 
         job_cookiefile = prepare_youtube_job_cookiefile(
             job_id,
-            url,
+            (active.get("media_source") or {}).get("page_url") or url,
             bool(active.get("youtube_auth")),
         )
         if job_cookiefile:
             log("session YouTube dédiée activée pour ce job")
 
         import yt_dlp
+        install_ffmpeg_timeouts()
 
         last_bytes = None
         last_time = time.monotonic()
         saw_progress = False
+        attempt_bytes = 0
+        media_finished = False
 
         def check_download_control():
             action = control_action(job_id)
@@ -964,7 +994,7 @@ def main():
                 raise DownloadPaused()
 
         def progress_hook(d):
-            nonlocal last_bytes, last_time, saw_progress, last_pause_check
+            nonlocal last_bytes, last_time, saw_progress, last_pause_check, attempt_bytes, media_finished
             if cancel_requested:
                 raise DownloadCancelled()
 
@@ -978,6 +1008,9 @@ def main():
             info = d.get("info_dict")
             if not isinstance(info, dict):
                 info = {}
+            # Caption transfers are sidecars, not media progress or completion.
+            if info.get('ext') in ('vtt', 'srt', 'ass', 'ssa', 'ttml', 'srv1', 'srv2', 'srv3', 'json3'):
+                return
             title = info.get("title") or ""
             filename = d.get("filename")
             tmpfilename = d.get("tmpfilename")
@@ -989,6 +1022,8 @@ def main():
             if status == "downloading":
                 saw_progress = True
                 downloaded = d.get("downloaded_bytes")
+                if isinstance(downloaded, (int, float)):
+                    attempt_bytes = max(attempt_bytes, downloaded)
                 total = d.get("total_bytes")
                 estimated = d.get("total_bytes_estimate")
                 speed = d.get("speed")
@@ -1019,6 +1054,7 @@ def main():
                 log(f"HOOK bytes={downloaded!r} total={total!r} speed={speed!r} eta={eta!r}")
 
             elif status == "finished":
+                media_finished = True
                 update_active(
                     status="downloading",
                     title=title or None,
@@ -1033,113 +1069,263 @@ def main():
         opts = build_opts(mode, progress_hook, output_dir, job_cookiefile)
         # Metadata extraction must not write a collection thumbnail early.
         opts["writethumbnail"] = False
+        if selected_source:
+            hls_options(opts, selected_source)
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            if active_pause_requested(job_id):
-                raise DownloadPaused()
+        candidates = [None]
+        if active.get('automatic') and not selected_source and mode != 'image':
+            update_active(resolver_status='finding')
+            candidates = resolve_candidates(opts, active, check_download_control, log)
+        for attempt, candidate in enumerate(candidates):
+            item_plan = None
+            attempt_bytes = 0
+            media_finished = False
+            attempt_started = time.monotonic()
+            try:
+                with youtube_dl(opts) as ydl:
+                    if active_pause_requested(job_id):
+                        raise DownloadPaused()
 
-            # Extraction metadata first: gets the title before the first media bytes.
-            info = ydl.extract_info(url, download=False)
-            validate_extracted_info(info, mode)
+                    # Extraction metadata first: gets the title before the first media bytes.
+                    def on_hls_fallback(source):
+                        nonlocal hls_used
+                        hls_used = True
+                        log(f"fallback {source['type'].upper()}: tentative de la source détectée (URL et headers masqués)")
 
-            title = info.get("title") if isinstance(info, dict) else ""
-            media_id = info.get("id") if isinstance(info, dict) else media_id
+                    if candidate is not None:
+                        info, selected_source = candidate.info, candidate.source
+                        hls_used = bool(selected_source)
+                        update_active(media_source=selected_source, media_used=candidate.sourceType,
+                                      hls_used=candidate.sourceType == 'hls', selected_source_type=candidate.sourceType,
+                                      selected_height=candidate.maxHeight if mode in ('720','1080','best') else None,
+                                      resolver_status='selected')
+                    else:
+                        info, selected_source = extract_metadata(opts, active, check_download_control, on_hls_fallback)
+                    hls_used = bool(selected_source) or hls_used
+                    if selected_source:
+                        update_active(media_source=selected_source, hls_used=selected_source["type"] == "hls", media_used=selected_source["type"])
+                    apply_item_metadata(info, active.get("media_item"))
+                    validate_extracted_info(info, mode)
+                    if mode != 'image' and (active.get('media_item') or active.get('track_selection') or mode in ('audio', 'mp3')):
+                        if candidate is None:
+                            candidate = candidate_from_info(info, selected_source, active, DownloadRequest.from_mode(mode))
+                        item_plan = build_item_plan(candidate, active, opts, [c for c in candidates if c is not None] or [candidate])
+                        info = item_plan.preparedInfo
+                        if active.get('media_item'):
+                            owned = getattr(candidate, '_track_cohort', None) or [candidate]
+                            update_active(media_item={**active['media_item'], **{kind:[track for c in owned for track in getattr(c,kind)]
+                                for kind in ('videoTracks','audioTracks','subtitleTracks')}})
+                        update_active(download_plan=item_plan.summary())
+                        trace_item(log, 'selected candidate', {'id': item_plan.candidateId,
+                                   'type': item_plan.sourceType, 'quality': candidate.maxHeight})
+                        trace_item(log, 'download', {'url': trace_url(item_plan.sourceUrl),
+                                   'sourceType': item_plan.sourceType,
+                                   'downloadUrls': [trace_url(u) for u in item_plan.downloadUrls]})
+                        trace_item(log, 'format selector generated', {'policy': item_plan.selectionPolicy,
+                                   'formats': item_plan.formatSelector})
+                    log('download plan created: ' + (selected_source['type'] if selected_source else 'ytdlp'))
+                    update_active(network_resource_ids=network_resource_ids(info,(selected_source or {}).get('page_url') or active['url']))
 
-            # Demander d'abord à yt-dlp quel nom il utiliserait afin de garder
-            # exactement sa sanitisation du titre, puis réserver un stem
-            # lisible et unique sans exposer l'ID du média.
-            prepared = ydl.prepare_filename(info)
-            base_stem = _filename_stem(prepared)
-            clean_stem = choose_unique_output_stem(output_dir, base_stem)
-            output_stem = str(output_dir / clean_stem)
+                    title = info.get("title") if isinstance(info, dict) else ""
+                    media_id = info.get("id") if isinstance(info, dict) else media_id
 
-            update_active(
-                status="downloading",
-                title=title or "",
-                media_id=media_id or None,
-                output_stem=output_stem,
-                metadata_status="ready" if title else "unavailable",
-                metadata_error=None if title else "Titre non fourni par l’extracteur.",
-                metadata_pid=None,
-            )
-            log(
-                f"métadonnées récupérées title={title!r} "
-                f"media_id={media_id!r} output_stem={output_stem!r}"
-            )
+                    # Demander d'abord à yt-dlp quel nom il utiliserait afin de garder
+                    # exactement sa sanitisation du titre, puis réserver un stem
+                    # lisible et unique sans exposer l'ID du média.
+                    prepared = ydl.prepare_filename(info)
+                    base_stem = _filename_stem(prepared)
+                    clean_stem = choose_unique_output_stem(output_dir, base_stem)
+                    output_stem = str(output_dir / clean_stem)
 
-            if active_pause_requested(job_id):
-                raise DownloadPaused()
-
-            # IMPORTANT : ne pas modifier ydl.params["outtmpl"] après
-            # l'initialisation. yt-dlp normalise cette option en interne et
-            # certaines versions attendent ensuite une structure de mapping.
-            # On crée donc un contexte dédié au téléchargement avec le template
-            # final dès sa construction.
-            download_opts = build_opts(mode, progress_hook, output_dir, job_cookiefile)
-            download_opts["outtmpl"] = output_template_for_stem(output_dir, clean_stem)
-
-            with yt_dlp.YoutubeDL(download_opts) as download_ydl:
-                if mode == "image":
-                    image = download_image(download_ydl, info, output_dir, clean_stem,
-                                           probe_media_streams if shutil.which("ffprobe") else None,
-                                           check_download_control)
-                    filepath = str(image)
-                    size = image.stat().st_size
-                    update_active(filepath=filepath, downloaded=size, total=size,
-                                  estimated_total=None, speed=None, eta=0)
-                    result = info
-                else:
-                    result = download_ydl.process_ie_result(info, download=True)
-
-                if mode != "image":
-                    filepath = None
-                if not isinstance(result, dict):
-                    raise RuntimeError("yt-dlp n’a pas renvoyé de résultat média valide.")
-
-                title = result.get("title") or title
-
-                prepared_result = None
-                try:
-                    prepared_result = download_ydl.prepare_filename(result)
-                    if mode == "mp3":
-                        prepared_result = str(Path(prepared_result).with_suffix(".mp3"))
-                except Exception:
-                    prepared_result = None
-
-                if mode == "audio":
-                    raw_media = select_final_media_path(
-                        result,
-                        prepared_result,
-                        output_dir,
-                        clean_stem,
-                        "audio",
+                    update_active(
+                        status="downloading",
+                        title=title or "",
+                        media_id=media_id or None,
+                        output_stem=output_stem,
+                        metadata_status="ready" if title else "unavailable",
+                        metadata_error=None if title else "Titre non fourni par l’extracteur.",
+                        metadata_pid=None,
+                    )
+                    log(
+                        f"métadonnées récupérées title={title!r} "
+                        f"media_id={media_id!r} output_stem={output_stem!r}"
                     )
 
-                    remuxed, codec = remux_original_audio(raw_media)
-                    filepath = str(remuxed)
-                    result["filepath"] = filepath
-                    result["ext"] = remuxed.suffix.lower().lstrip(".")
-                    result["audio_original_codec"] = codec
-                    result = embed_thumbnail_after_remux(
-                        download_ydl, result, remuxed
-                    )
+                    if active_pause_requested(job_id):
+                        raise DownloadPaused()
 
-                    ok, reason = validate_media_file(remuxed, "audio")
-                    if not ok:
-                        raise RuntimeError(
-                            f"Le fichier audio final est invalide : {reason}"
-                        )
-                elif mode != "image":
-                    final_media = select_final_media_path(
-                        result,
-                        prepared_result,
-                        output_dir,
-                        clean_stem,
-                        mode,
-                    )
-                    filepath = str(final_media)
+                    # IMPORTANT : ne pas modifier ydl.params["outtmpl"] après
+                    # l'initialisation. yt-dlp normalise cette option en interne et
+                    # certaines versions attendent ensuite une structure de mapping.
+                    # On crée donc un contexte dédié au téléchargement avec le template
+                    # final dès sa construction.
+                    download_opts = build_opts(mode, progress_hook, output_dir, job_cookiefile)
+                    download_opts["outtmpl"] = output_template_for_stem(output_dir, clean_stem)
+                    if selected_source:
+                        hls_options(download_opts, selected_source)
+                    if item_plan:
+                        download_opts['format'] = item_plan.select_formats
+                        download_opts.update(writesubtitles=bool(item_plan.subtitleLanguages),
+                            subtitleslangs=list(item_plan.subtitleLanguages), writeautomaticsub=False)
+                        if item_plan.auxiliarySources:
+                            from request_context import options as context_options
+                            from media_tracks import auxiliary_contexts
+                            if not download_opts.get('kitty_request_context'):
+                                context_options(download_opts, item_plan.auxiliarySources[0])
+                            download_opts.setdefault('kitty_variant_contexts', []).extend(auxiliary_contexts(item_plan))
+                        if item_plan.embeddedAudioIndex is not None and item_plan.selection.get('requested_formats'):
+                            parts = item_plan.selection['requested_formats']
+                            audio_input = next(i for i,f in enumerate(parts) if f.get('vcodec') == 'none')
+                            # Reuse FFmpegMerger, replacing its default first
+                            # audio stream with the selected embedded stream.
+                            download_opts.setdefault('postprocessor_args', {})['merger+ffmpeg_o1'] = [
+                                '-map', f'-{audio_input}:a:0', '-map', f'{audio_input}:a:{item_plan.embeddedAudioIndex}']
+                        if mode in ('720', '1080', 'best') and item_plan.selection.get('ext') not in ('mp3', 'mkv', 'mka', 'ogg', 'opus', 'flac', 'm4a', 'mp4', 'm4v', 'mov'):
+                            # EmbedThumbnail rejects WebM. Keep the selected
+                            # container/quality and its UI poster; no media
+                            # transfer should fail for an optional cover.
+                            download_opts['postprocessors'] = [p for p in download_opts['postprocessors'] if p['key'] != 'EmbedThumbnail']
+                            download_opts['writethumbnail'] = False
 
-                log(f"fichier média final validé: {filepath!r}")
+                    if mode != 'image':
+                        from source_refresh import SourceRefresh, refreshed_metadata
+                        from copy import deepcopy
+                        import uuid
+                        refresh_path = CONTROL_DIR / (job_id + '.source-ledger.json')
+
+                        def browser_source(previous):
+                            if previous.get('tab_id') is None or not previous.get('id'):
+                                return None
+                            nonce = uuid.uuid4().hex
+                            update_active(source_refresh_request={'nonce': nonce, 'candidate_id': previous['id'],
+                                'tab_id': previous['tab_id'], 'media_item_id': previous.get('media_item_id'),
+                                'requested_at': time.time()})
+                            deadline = time.monotonic() + 6
+                            while time.monotonic() < deadline:
+                                check_download_control()
+                                current = get_state().get('active') or {}
+                                if current.get('id') != job_id:
+                                    check_download_control()
+                                    return None
+                                if current.get('source_refresh_ack') == nonce:
+                                    update_active(source_refresh_request=None, source_refresh_ack=None)
+                                    return current.get('media_source')
+                                time.sleep(.1)
+                            update_active(source_refresh_request=None)
+                            return None
+
+                        def resolve_source(previous, previous_info):
+                            return refreshed_metadata(previous, previous_info, download_opts, active,
+                                                      check_download_control, browser_source)
+
+                        def publish_source(source, generation):
+                            nonlocal selected_source
+                            selected_source = deepcopy(source)
+                            update_active(media_source=source, source_refresh_count=generation,
+                                          source_refresh_request=None, source_refresh_ack=None)
+
+                        download_opts['kitty_source_refresh'] = SourceRefresh(
+                            candidate.info if item_plan else info, selected_source, resolve_source, publish_source,
+                            check_download_control, log, refresh_path)
+
+                    embedded_specs = None
+                    if item_plan and (item_plan.embeddedAudioIndex is not None or item_plan.embeddedSubtitles):
+                        embedded_specs = download_opts['postprocessors']
+                        download_opts['postprocessors'] = []
+                    with youtube_dl(download_opts) as download_ydl:
+                        if embedded_specs is not None:
+                            from media_tracks import embedded_postprocessor
+                            from yt_dlp.postprocessor import get_postprocessor
+                            local_plan = item_plan
+                            if item_plan.selection.get('requested_formats'):
+                                from dataclasses import replace
+                                local_plan = replace(item_plan, embeddedAudioIndex=None)
+                            download_ydl.add_post_processor(embedded_postprocessor(download_ydl, local_plan, mode, run_media_tool))
+                            for spec in embedded_specs:
+                                spec = dict(spec)
+                                key, when = spec.pop('key'), spec.pop('when', 'post_process')
+                                download_ydl.add_post_processor(get_postprocessor(key)(download_ydl, **spec), when=when)
+                        if mode == "image":
+                            image = download_image(download_ydl, info, output_dir, clean_stem,
+                                                   probe_media_streams if shutil.which("ffprobe") else None,
+                                                   check_download_control)
+                            filepath = str(image)
+                            size = image.stat().st_size
+                            update_active(filepath=filepath, downloaded=size, total=size,
+                                          estimated_total=None, speed=None, eta=0)
+                            result = info
+                        else:
+                            log('downloader started: ' + (selected_source['type'] if selected_source else 'ytdlp'))
+                            result = download_ydl.process_ie_result(info, download=True)
+
+                        if mode != "image":
+                            filepath = None
+                        if not isinstance(result, dict):
+                            raise RuntimeError("yt-dlp n’a pas renvoyé de résultat média valide.")
+
+                        title = result.get("title") or title
+
+                        prepared_result = None
+                        try:
+                            prepared_result = download_ydl.prepare_filename(result)
+                            if mode == "mp3":
+                                prepared_result = str(Path(prepared_result).with_suffix(".mp3"))
+                        except Exception:
+                            prepared_result = None
+
+                        if mode == "audio":
+                            raw_media = select_final_media_path(
+                                result,
+                                prepared_result,
+                                output_dir,
+                                clean_stem,
+                                "audio",
+                            )
+
+                            remuxed, codec = remux_original_audio(raw_media)
+                            filepath = str(remuxed)
+                            result["filepath"] = filepath
+                            result["ext"] = remuxed.suffix.lower().lstrip(".")
+                            result["audio_original_codec"] = codec
+                            result = embed_thumbnail_after_remux(
+                                download_ydl, result, remuxed
+                            )
+
+                            ok, reason = validate_media_file(remuxed, "audio")
+                            if not ok:
+                                raise RuntimeError(
+                                    f"Le fichier audio final est invalide : {reason}"
+                                )
+                        elif mode != "image":
+                            final_media = select_final_media_path(
+                                result,
+                                prepared_result,
+                                output_dir,
+                                clean_stem,
+                                mode,
+                            )
+                            filepath = str(final_media)
+
+                        log(f"fichier média final validé: {filepath!r}")
+
+                break
+            except Exception as attempt_error:
+                check_download_control()
+                if (candidate is None or attempt + 1 == len(candidates)
+                        or not can_runtime_fallback(attempt_error, attempt_bytes, media_finished,
+                                                    time.monotonic() - attempt_started)):
+                    raise
+                cleanup_cancelled_files(seen_paths, output_stem, started_at)
+                (CONTROL_DIR / (job_id + '.source-ledger.json')).unlink(missing_ok=True)
+                seen_paths.clear()
+                output_stem = None
+                last_bytes = None
+                last_time = time.monotonic()
+                saw_progress = False
+                update_active(status='starting', resolver_status='finding', downloaded=None,
+                              total=None, estimated_total=None, speed=None, eta=None,
+                              filepath=None, output_stem=None, title='', metadata_status='fetching')
+                log('fallback to next candidate: ' + candidates[attempt + 1].sourceType)
 
         if mode == "image":
             check_download_control()
@@ -1195,24 +1381,37 @@ def main():
             freeze_after_external_stop(job_id, signal.SIGTERM)
             return 128 + int(signal.SIGTERM)
         clear_control(job_id)
-        cleanup_failed_auxiliary_files(output_stem, started_at)
+        expiry_code = getattr(exc, 'code', '')
+        expired_partial = bool(active.get('downloaded')) and expiry_code in (
+            'hls_expired', 'dash_expired', 'direct_expired', 'hls_access_denied', 'dash_access_denied', 'direct_access_denied')
+        if expiry_code != 'source_identity_unconfirmed' and not expired_partial:
+            cleanup_failed_auxiliary_files(output_stem, started_at)
 
-        raw_error = str(exc).strip() or exc.__class__.__name__
-        error_info = classify_backend_error(
+        raw_error = str(getattr(exc, 'detail', None) or exc).strip() or exc.__class__.__name__
+        error_info = hls_error_info(exc, (selected_source or {}).get("type", "hls")) if hls_used else classify_backend_error(
             raw_error,
             context="download",
+            code_hint=getattr(exc, "code", None),
             youtube_auth=bool(active.get("youtube_auth")),
             mode=mode,
         )
+        if active.get("automatic"):
+            from errors import redact_error_detail
+            error_info['detail'] = redact_error_detail(error_info.get('detail') or raw_error)
+            raw_error = error_info['message']
         log(
             f"ERREUR worker code={error_info['code']} "
-            f"message={error_info['message']!r} detail={raw_error!r}"
+            f"message={error_info['message']!r} detail={error_info['detail']!r}"
         )
         finish_active("error", error=raw_error, error_info=error_info)
         start_next_if_any()
         return 1
 
     finally:
+        current = get_state()
+        completed = next((j for j in current.get('history', []) if j.get('id') == job_id), {})
+        if completed.get('status') in ('finished', 'cancelled'):
+            (CONTROL_DIR / (job_id + '.source-ledger.json')).unlink(missing_ok=True)
         if control_watcher is not None:
             control_watcher.set()
         if MACOS:

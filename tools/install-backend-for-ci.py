@@ -1,5 +1,6 @@
 """Exercise the same backend-only files distributed on GitHub."""
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -12,7 +13,9 @@ platform = "macos" if sys.platform == "darwin" else "windows-x64" if sys.platfor
 with tempfile.TemporaryDirectory(prefix="kitty-backend-ci-") as directory:
     source = packages.stage_backend(platform, Path(directory) / "kitty-download-manager")
     assert not (source / "extension").exists()
-    command = (["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(source / "Install.ps1")]
+    command = (["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(source / "Install.ps1"), "-NonInteractive"]
                if platform == "windows-x64" else ["/bin/bash", str(source / ("Install.command" if platform == "macos" else "install.sh"))])
+    if platform == "windows-x64" and os.environ.get("KITTY_CI_INSTALL_DIR"):
+        command.extend(['-InstallDir', os.environ['KITTY_CI_INSTALL_DIR']])
     result = subprocess.run(command, cwd=source)
     sys.exit(result.returncode)

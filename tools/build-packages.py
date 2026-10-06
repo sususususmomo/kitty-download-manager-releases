@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMON = ("backend.json", "LICENSE", "THIRD-PARTY-NOTICES.md")
 PLATFORMS = {
     "linux": ("install.sh",),
-    "windows-x64": ("Install.cmd", "Install.ps1"),
+    "windows-x64": ("Install.cmd", "Install.ps1", "Diagnose.cmd", "Diagnose.ps1", "README-Windows.md"),
     "macos": ("Install.command", "Uninstall.command"),
 }
 

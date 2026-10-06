@@ -36,7 +36,13 @@ from app_paths import (
 from platform_support import (WINDOWS, MACOS, process_args, same_path, choose_macos_folder, open_macos_path, process_alive, script_process_matches, spawn_options,
                               run_hidden, find_firefox, firefox_uses_profile, choose_windows_folder,
                               configure_worker_job, watch_worker_controls, maintenance_active)
-from errors import normalize_error_payload
+from platform_support import replace_file, require_psutil
+from metadata_guard import extract_metadata, PROBE_TIMEOUT
+from download_planner import DownloadRequest
+from dataclasses import asdict
+from media_item import validate_item
+from hls import validate_source, validate_fallbacks, apply_options, identity as resource_identity, error_info as hls_error_info, http_url
+from errors import normalize_error_payload, classify_backend_error
 from compatibility import NATIVE_PROTOCOL_VERSION, assess_update_risk, client_report, version_tuple
 from runtime_storage import (
     LOG_FILE,
@@ -73,7 +79,7 @@ DEFAULT_OUTPUT_DIR = default_output_dir()
 DOWNLOADS_DIR = DEFAULT_OUTPUT_DIR.parent
 
 STATE_BACKUP_DIR = CACHE_DIR / "state-backups"
-APP_VERSION = "8.32"
+APP_VERSION = "8.48"
 UPDATE_CACHE_FILE = CACHE_DIR / "update-check.json"
 KITTY_RELEASE_CACHE_FILE = CACHE_DIR / "kitty-release-check.json"
 UPDATE_BACKUP_DIR = CACHE_DIR / "update-backups"
@@ -112,6 +118,8 @@ def read_message():
     return json.loads(data.decode("utf-8"))
 
 def send_message(payload):
+    from request_context import public_state
+    payload = public_state(payload)
     if isinstance(payload, dict) and payload.get("ok") is False and payload.get("error") is not None:
         payload = normalize_error_payload(payload, context=CURRENT_ACTION)
 
@@ -134,24 +142,32 @@ def load_state_locked():
     return snapshot()
 
 
-def load_settings():
+def load_settings(*, strict=False):
     try:
         data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
+            if strict:
+                raise ValueError("Le fichier des réglages ne contient pas un objet JSON.")
             return {}
         return data
+    except FileNotFoundError:
+        return {}
     except Exception:
+        if strict:
+            raise
         return {}
 
 
 def save_settings(settings):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = SETTINGS_FILE.with_suffix(".tmp")
-    tmp.write_text(
-        json.dumps(settings, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    os.replace(tmp, SETTINGS_FILE)
+    _secure_write_text(SETTINGS_FILE, json.dumps(settings, ensure_ascii=False, indent=2))
+
+
+def update_settings(**updates):
+    with queue_lock(CONFIG_DIR / "settings.lock"):
+        settings = load_settings(strict=True)
+        settings.update(updates)
+        save_settings(settings)
+        return settings
 
 
 def normalize_output_dir(value):
@@ -184,9 +200,7 @@ def set_output_dir(value):
         if not path.is_dir():
             raise RuntimeError("La destination sélectionnée n'est pas un dossier.")
 
-        settings = load_settings()
-        settings["output_dir"] = str(path)
-        save_settings(settings)
+        settings = update_settings(output_dir=str(path))
 
         return {
             "ok": True,
@@ -262,7 +276,7 @@ def _secure_write_text(path, text, mode=0o600):
             f.flush()
             os.fsync(f.fileno())
         os.chmod(tmp, mode)
-        os.replace(tmp, path)
+        replace_file(tmp, path)
         try:
             dir_fd = os.open(path.parent, os.O_RDONLY)
             try:
@@ -312,10 +326,7 @@ def _youtube_pending_save(data):
 
 
 def _youtube_pending_clear():
-    try:
-        YOUTUBE_PENDING_FILE.unlink(missing_ok=True)
-    except Exception:
-        pass
+    YOUTUBE_PENDING_FILE.unlink(missing_ok=True)
 
 
 def _youtube_session_paths(token):
@@ -340,7 +351,7 @@ def _validate_youtube_session(token, require_exists=True):
 
     if require_exists and not root.exists():
         raise RuntimeError("Session YouTube temporaire introuvable.")
-    if root.exists() and root.is_symlink():
+    if root.exists() and (root.is_symlink() or (hasattr(root, "is_junction") and root.is_junction())):
         raise RuntimeError("Session YouTube symbolique refusée.")
 
     marker = paths["marker"]
@@ -356,7 +367,7 @@ def _validate_youtube_session(token, require_exists=True):
 
     for key in ("home", "profile"):
         path = paths[key]
-        if path.exists() and path.is_symlink():
+        if path.exists() and (path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction())):
             raise RuntimeError(f"Chemin symbolique refusé dans la session YouTube : {key}")
 
     return paths
@@ -372,7 +383,36 @@ def _safe_remove_youtube_session(token):
     if root.parent.resolve(strict=False) != YOUTUBE_SESSION_ROOT.resolve(strict=False):
         raise RuntimeError("Profondeur de session YouTube invalide.")
 
-    shutil.rmtree(root)
+    def remove_readonly(function, filename, exc_info):
+        error = exc_info[1]
+        path = Path(filename)
+        if (not isinstance(error, PermissionError) or function not in (os.unlink, os.rmdir)
+                or not path.resolve().is_relative_to(root.resolve()) or path.is_symlink()
+                or (hasattr(path, "is_junction") and path.is_junction())):
+            raise error
+        os.chmod(path, 0o700 if path.is_dir() else 0o600)
+        function(filename)
+
+    # Keep the ownership marker until descendants have been removed. A sharing
+    # violation must leave enough evidence for a later, confined retry.
+    def remove_file(path):
+        try:
+            path.unlink()
+        except PermissionError:
+            if not WINDOWS or path.is_symlink():
+                raise
+            os.chmod(path, 0o600)
+            path.unlink()
+
+    for child in root.iterdir():
+        if child == paths["marker"]:
+            continue
+        if child.is_dir() and not child.is_symlink() and not (hasattr(child, "is_junction") and child.is_junction()):
+            shutil.rmtree(child, onerror=remove_readonly if WINDOWS else None)
+        else:
+            remove_file(child)
+    remove_file(paths["marker"])
+    root.rmdir()
 
 
 def _find_firefox_executable():
@@ -526,6 +566,8 @@ def _youtube_auth_browser_running(pending):
     profile = paths["profile"]
 
     if WINDOWS or MACOS:
+        if time.time() - float(pending.get("created_at") or 0) < 2.0:
+            return True
         return firefox_uses_profile(profile)
 
     # Linux : ne jamais bloquer uniquement à cause d'un lock de profil stale.
@@ -684,16 +726,19 @@ def youtube_auth_enabled():
     return bool(load_settings().get("youtube_auth_enabled", False)) and _youtube_auth_configured()
 
 
-def youtube_auth_start():
-    if not (sys.platform.startswith("linux") or MACOS):
+def _youtube_auth_start_unlocked():
+    if not (sys.platform.startswith("linux") or MACOS or WINDOWS):
         return {
             "ok": False,
-            "error": "La configuration automatique de la session YouTube est disponible sous Linux et macOS.",
+            "error": "La configuration automatique de la session YouTube est disponible sous Windows, Linux et macOS.",
         }
+
+    if WINDOWS or MACOS:
+        require_psutil("process_iter", "Process", "pid_exists", "NoSuchProcess", "AccessDenied")
 
     pending = _youtube_pending_load()
     if pending:
-        status = youtube_auth_status(auto_finalize=True)
+        status = _youtube_auth_status_unlocked(auto_finalize=True)
         if status.get("pending"):
             return status
 
@@ -820,7 +865,7 @@ def _youtube_auth_finalize(pending):
         _safe_remove_youtube_session(token)
         _youtube_pending_clear()
 
-        os.replace(candidate, YOUTUBE_COOKIE_FILE)
+        replace_file(candidate, YOUTUBE_COOKIE_FILE)
         os.chmod(YOUTUBE_COOKIE_FILE, 0o600)
 
         metadata = {
@@ -837,9 +882,7 @@ def _youtube_auth_finalize(pending):
             0o600,
         )
 
-        settings = load_settings()
-        settings["youtube_auth_enabled"] = True
-        save_settings(settings)
+        update_settings(youtube_auth_enabled=True)
 
         return {
             "ok": True,
@@ -871,11 +914,12 @@ def _youtube_auth_finalize(pending):
             "state": "error",
             "configured": _youtube_auth_configured(),
             "enabled": youtube_auth_enabled(),
+            "code": getattr(exc, "code", None),
             "error": str(exc),
         }
 
 
-def youtube_auth_status(auto_finalize=True):
+def _youtube_auth_status_unlocked(auto_finalize=True):
     pending = _youtube_pending_load()
     if pending:
         try:
@@ -903,6 +947,7 @@ def youtube_auth_status(auto_finalize=True):
                 "state": "error",
                 "configured": _youtube_auth_configured(),
                 "enabled": youtube_auth_enabled(),
+                "code": getattr(exc, "code", None),
                 "error": str(exc),
             }
 
@@ -919,40 +964,32 @@ def youtube_auth_status(auto_finalize=True):
     }
 
 
-def set_youtube_auth_enabled(value):
+def _set_youtube_auth_enabled_unlocked(value):
     enabled = bool(value)
     if enabled and not _youtube_auth_configured():
-        result = youtube_auth_status(auto_finalize=False)
+        result = _youtube_auth_status_unlocked(auto_finalize=False)
         result.update({
             "ok": False,
             "error": "Configure d'abord une session YouTube dédiée.",
         })
         return result
 
-    settings = load_settings()
-    settings["youtube_auth_enabled"] = enabled
-    save_settings(settings)
-    return youtube_auth_status(auto_finalize=False)
+    update_settings(youtube_auth_enabled=enabled)
+    return _youtube_auth_status_unlocked(auto_finalize=False)
 
 
-def youtube_auth_delete():
+def _youtube_auth_delete_unlocked():
     pending = _youtube_pending_load()
     if pending:
-        try:
-            if _youtube_auth_browser_running(pending):
-                result = youtube_auth_status(auto_finalize=False)
-                result.update({
-                    "ok": False,
-                    "error": "Ferme d'abord la fenêtre Firefox dédiée avant de supprimer la session.",
-                })
-                return result
-        except Exception:
-            pass
+        if _youtube_auth_browser_running(pending):
+            result = _youtube_auth_status_unlocked(auto_finalize=False)
+            result.update({
+                "ok": False,
+                "error": "Ferme d'abord la fenêtre Firefox dédiée avant de supprimer la session.",
+            })
+            return result
 
-        try:
-            _safe_remove_youtube_session(pending["token"])
-        except Exception:
-            pass
+        _safe_remove_youtube_session(pending["token"])
         _youtube_pending_clear()
 
     _ensure_private_dir(YOUTUBE_AUTH_DIR)
@@ -963,10 +1000,28 @@ def youtube_auth_delete():
         except FileNotFoundError:
             pass
 
-    settings = load_settings()
-    settings["youtube_auth_enabled"] = False
-    save_settings(settings)
-    return youtube_auth_status(auto_finalize=False)
+    update_settings(youtube_auth_enabled=False)
+    return _youtube_auth_status_unlocked(auto_finalize=False)
+
+
+def youtube_auth_start():
+    with queue_lock(YOUTUBE_AUTH_DIR / "session.lock"):
+        return _youtube_auth_start_unlocked()
+
+
+def youtube_auth_status(auto_finalize=True):
+    with queue_lock(YOUTUBE_AUTH_DIR / "session.lock"):
+        return _youtube_auth_status_unlocked(auto_finalize=auto_finalize)
+
+
+def set_youtube_auth_enabled(value):
+    with queue_lock(YOUTUBE_AUTH_DIR / "session.lock"):
+        return _set_youtube_auth_enabled_unlocked(value)
+
+
+def youtube_auth_delete():
+    with queue_lock(YOUTUBE_AUTH_DIR / "session.lock"):
+        return _youtube_auth_delete_unlocked()
 
 
 def youtube_auth_for_url(url):
@@ -1168,7 +1223,9 @@ def spawn_metadata(job):
     """
     Lance le probe de titre avec un état explicite et observable.
     """
-    if not META_WORKER.exists() or not isinstance(job, dict) or not job.get("id"):
+    # Automatic jobs are resolved once, when claimed. A title-only extraction
+    # while queued would duplicate the planner's probes and race its status.
+    if not META_WORKER.exists() or not isinstance(job, dict) or not job.get("id") or job.get("automatic"):
         return None
 
     job_id = str(job["id"])
@@ -1600,8 +1657,7 @@ def extract_collection_entries(url):
         if cookiefile:
             opts["cookiefile"] = str(cookiefile)
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(canonical, download=False)
+        info, _ = extract_metadata(opts, {"url": canonical}, timeout=60)
 
         if not isinstance(info, dict):
             raise RuntimeError("yt-dlp n’a pas reconnu cette URL.")
@@ -1785,10 +1841,24 @@ def enqueue_playlist(url, mode, output_dir=None):
     }
 
 
-def enqueue(url, mode, force=False, output_dir=None):
+def enqueue(url, mode, force=False, output_dir=None, media_source=None, hls_fallbacks=None, media_fallbacks=None, automatic=False, media_item=None, track_selection=None):
+    from media_tracks import validate_selection
+    tracks = validate_selection(track_selection)
     if not isinstance(mode, str) or mode not in {"1080", "720", "best", "audio", "mp3", "image"}:
         return {"ok": False, "error": "Format de téléchargement invalide."}
-    url = normalize_download_url(url)
+    source = validate_source(media_source) if media_source is not None else None
+    if not isinstance(automatic, bool):
+        raise ValueError('Stratégie automatique invalide.')
+    item = validate_item(media_item)
+    if item and (not automatic or source or mode == "image"):
+        raise ValueError("Le média logique nécessite le mode automatique.")
+    original_page = http_url(url.strip() if isinstance(url, str) else url) if automatic and not source and mode != 'image' else None
+    if item:
+        original_page = item["page_url"]
+    fallbacks = validate_fallbacks(media_fallbacks if media_fallbacks is not None else hls_fallbacks, limit=12 if item else 3)
+    if item and any(s.get('media_item_id', item['id']) != item['id'] or s['page_url'] != original_page for s in fallbacks):
+        raise ValueError('Le candidat ne correspond pas au média sélectionné.')
+    url = source["url"] if source else normalize_download_url(url)
 
     if not WORKER.exists():
         return {"ok": False, "error": f"Worker introuvable : {WORKER}"}
@@ -1811,10 +1881,32 @@ def enqueue(url, mode, force=False, output_dir=None):
         "youtube_auth": youtube_auth_for_url(url),
     }
 
+    if item:
+        job.update(media_item=item, title=item["title"], thumbnail=item["thumbnail"])
+    if tracks:
+        job['track_selection'] = tracks
+    if source:
+        job.update(media_source=source, title=source["title"],
+                   youtube_auth=youtube_auth_for_url(source["page_url"]))
+    if automatic and not source and mode != 'image':
+        job.update(automatic=True, source_page_url=original_page,
+                   download_request=asdict(DownloadRequest.from_mode(mode)))
+    if fallbacks:
+        job["media_fallbacks" if media_fallbacks is not None else "hls_fallbacks"] = fallbacks
+
+    def same_media(other):
+        if (other.get('track_selection') or {}) != tracks:
+            return False
+        if item and other.get("media_item"):
+            return other.get("url") == url or (other["media_item"].get("id"), other["media_item"].get("page_url")) == (item["id"], item["page_url"])
+        return other.get("url") == url or (source and (
+            other.get("media_source", {}).get("identity") == source["identity"]
+            or resource_identity(source['url'],source['page_url']) in other.get('network_resource_ids',[])))
+
     def mutate(data):
         active = data.get("active")
 
-        if active and active.get("url") == url and active.get("mode") == mode:
+        if active and same_media(active) and active.get("mode") == mode:
             return {
                 "ok": False,
                 "code": "already_active",
@@ -1824,7 +1916,7 @@ def enqueue(url, mode, force=False, output_dir=None):
             }
 
         for queued in data.get("queue", []):
-            if queued.get("url") == url and queued.get("mode") == mode:
+            if same_media(queued) and queued.get("mode") == mode:
                 return {
                     "ok": False,
                     "code": "already_queued",
@@ -1836,7 +1928,7 @@ def enqueue(url, mode, force=False, output_dir=None):
         if not force:
             for previous in data.get("history", []):
                 if (
-                    previous.get("url") == url
+                    same_media(previous)
                     and previous.get("mode") == mode
                     and previous.get("status") == "finished"
                     and Path(previous.get("output_dir") or DEFAULT_OUTPUT_DIR) == job_output_dir
@@ -1869,6 +1961,80 @@ def enqueue(url, mode, force=False, output_dir=None):
         spawn_metadata(job)
 
     return {"ok": True, "state": snapshot(), "job_id": job["id"]}
+
+
+def probe_hls(raw):
+    cookiefile = None
+    try:
+        import yt_dlp
+        source = validate_source(raw)
+        opts = apply_options({"quiet": True, "no_warnings": True, "noplaylist": True,
+                              "skip_download": True, "socket_timeout": 8, "retries": 0,
+                              "extractor_retries": 0}, source)
+        cookiefile = _prepare_playlist_auth_cookie_copy(source["page_url"])
+        if cookiefile:
+            opts["cookiefile"] = str(cookiefile)
+        info, _ = extract_metadata(opts, {"url": source["url"], "media_source": source}, timeout=PROBE_TIMEOUT)
+        from media_tracks import catalogue, source_id
+        heights = sorted({int(f["height"]) for f in info["formats"]
+                          if isinstance(f.get("height"), (int, float)) and 0 < f["height"] < 20000})
+        return {"ok": True, **catalogue(info, source_id(source), source['type']), "title": info["title"], "heights": heights,
+                "type": source['type'], "format_count": len(info["formats"]), "live": bool(info.get("is_live")),
+                "size": max((f.get('filesize') or f.get('filesize_approx') or 0 for f in info['formats']),default=0) or None,
+                "format": str(info['formats'][0].get('ext') or '').upper() or None,
+                "duration": info.get('duration'), "thumbnail": info.get("thumbnail"),
+                "separate_av": any(f.get('vcodec') != 'none' and f.get('acodec') == 'none' for f in info['formats']) and any(f.get('vcodec') == 'none' and f.get('acodec') != 'none' for f in info['formats']),
+                "codecs": sorted({str(f.get('vcodec')) for f in info['formats'] if f.get('vcodec') not in (None, 'none')})[:4],
+                "bitrates_kbps": sorted({round(f['tbr']) for f in info['formats'] if isinstance(f.get('tbr'), (float, int)) and 0 < f['tbr'] < 1000000}),
+                "has_audio": any(f.get('acodec') not in (None, 'none') for f in info['formats']),
+                "has_video": any(f.get('vcodec') not in (None, 'none') for f in info['formats'])}
+    except ValueError:
+        return {"ok": False, "code": "invalid_url", "error": "Candidat média invalide."}
+    except Exception as exc:
+        error = hls_error_info(exc, (raw or {}).get("type", "hls") if isinstance(raw, dict) else "hls")
+        return {"ok": False, "code": error["code"], "error": error["message"]}
+    finally:
+        _cleanup_playlist_auth_cookie_copy(cookiefile)
+
+
+def probe_media_item(url, raw_item, media_sources=None):
+    item = validate_item(raw_item)
+    target = http_url(url)
+    sources = validate_fallbacks(media_sources, limit=12)
+    if sources and any(s.get('media_item_id', item['id']) != item['id'] or s['page_url'] != item['page_url'] for s in sources):
+        raise ValueError('Le candidat ne correspond pas au média sélectionné.')
+    from media_item import prefers_extractor, FATAL_PAGE_CODES
+    prefer_page = prefers_extractor(item, target)
+    cookiefile = None
+    page_error = None
+    if prefer_page or not sources:
+        try:
+            opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "skip_download": True,
+                    "format": None, "ignore_no_formats_error": True,
+                    "socket_timeout": 8, "retries": 0, "extractor_retries": 0, "playlistend": 1}
+            cookiefile = _prepare_playlist_auth_cookie_copy(target)
+            if cookiefile:
+                opts["cookiefile"] = str(cookiefile)
+            info, _ = extract_metadata(opts, {"url": target}, timeout=20)
+            from media_tracks import catalogue
+            return {"ok": True, **catalogue(info, 'item-extractor', 'ytdlp'), "title": info.get("title"), "thumbnail": info.get("thumbnail"), "duration": info.get("duration")}
+        except Exception as exc:
+            error = classify_backend_error(exc, code_hint=getattr(exc, 'code', None))
+            page_error = {"ok": False, "code": error['code'], "error": error['message']}
+            if error['code'] in FATAL_PAGE_CODES:
+                return page_error
+        finally:
+            _cleanup_playlist_auth_cookie_copy(cookiefile)
+    if sources:
+        from concurrent.futures import ThreadPoolExecutor
+        from media_tracks import KINDS
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            reports = list(pool.map(probe_hls, sources))
+        good = [r for r in reports if r.get('ok')]
+        if good:
+            return {**good[0], **{kind: [t for r in good for t in r[kind]] for kind in KINDS}}
+        return page_error or reports[0]
+    return page_error or {"ok": False, "error": "Métadonnées du média indisponibles."}
 
 
 def clear_queue():
@@ -1909,6 +2075,37 @@ def clear_queue():
 
 
 
+def refresh_source(job_id, nonce, raw_source):
+    """Only a pending worker request may replace its own candidate/context."""
+    from source_refresh import resource, digest
+    from hls import validate_source
+    try:
+        source = validate_source(raw_source)
+    except ValueError:
+        return {'ok': False, 'code': 'invalid_source_refresh'}
+    result = {'ok': False, 'code': 'stale_source_refresh'}
+    def mutate(data):
+        job = data.get('active') or {}
+        request = job.get('source_refresh_request') or {}
+        previous = job.get('media_source') or {}
+        if job.get('id') != job_id or request.get('nonce') != nonce or not previous:
+            return
+        if (source.get('id') != request.get('candidate_id')
+                or any(source.get(k) != previous.get(k) for k in ('type', 'tab_id', 'page_url', 'media_item_id'))
+                or resource(source['url']) != resource(previous['url'])):
+            result.update(code='source_identity_unconfirmed')
+            return
+        if digest([source['url'], source.get('request_context'), source.get('variants')]) == digest(
+                [previous['url'], previous.get('request_context'), previous.get('variants')]):
+            return
+        # No enqueue, no ID/mode/format/stem/progress change.
+        job['media_source'] = source
+        job['source_refresh_ack'] = nonce
+        result.update(ok=True, code='candidate_refreshed')
+    with_state(mutate)
+    return result
+
+
 def retry_job(job_id):
     state = snapshot()
     previous = next(
@@ -1921,10 +2118,16 @@ def retry_job(job_id):
         return {"ok": False, "error": "Seuls les téléchargements en erreur peuvent être relancés."}
 
     return enqueue(
-        previous.get("url", ""),
+        previous.get("url", "") if previous.get('media_item') else previous.get('source_page_url') or previous.get("url", ""),
         previous.get("mode", "1080"),
         force=True,
         output_dir=previous.get("output_dir"),
+        media_source=None if previous.get('automatic') else previous.get("media_source"),
+        hls_fallbacks=previous.get("hls_fallbacks"),
+        media_fallbacks=previous.get("media_fallbacks"),
+        automatic=bool(previous.get("automatic")),
+        media_item=previous.get("media_item"),
+        track_selection=previous.get('track_selection'),
     )
 
 
@@ -1935,11 +2138,7 @@ def control_path(job_id):
 def set_control(job_id, action):
     if not job_id:
         return
-    CONTROL_DIR.mkdir(parents=True, exist_ok=True)
-    path = control_path(job_id)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"action": action, "updated_at": time.time()}), encoding="utf-8")
-    os.replace(tmp, path)
+    _secure_write_text(control_path(job_id), json.dumps({"action": action, "updated_at": time.time()}))
 
 
 def clear_control(job_id):
@@ -2186,6 +2385,8 @@ def remove_queued(job_id):
     return {"ok": True, "state": snapshot()}
 
 def repair_state():
+    if WINDOWS or MACOS:
+        require_psutil("process_iter", "Process", "pid_exists", "wait_procs", "NoSuchProcess", "AccessDenied")
     if (WINDOWS or MACOS) and maintenance_active(CACHE_DIR / "maintenance.json"):
         return read_state(QUEUE_FILE, LOCK_FILE)
     """Validate/migrate state and recover active jobs that cannot be real."""
@@ -2478,6 +2679,9 @@ def _python_module_probe(import_name, distribution_name, label, required=True):
 
     try:
         module = importlib.import_module(import_name)
+        if import_name == "psutil":
+            from runtime_check import check_psutil_api
+            check_psutil_api(module)
         result["ok"] = True
         module_file = getattr(module, "__file__", None)
         if module_file:
@@ -2660,11 +2864,7 @@ def _available_from_packages(dep_id, package_updates):
 
 def _atomic_update_cache(data):
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = UPDATE_CACHE_FILE.with_name(UPDATE_CACHE_FILE.name + f".tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, UPDATE_CACHE_FILE)
+        _secure_write_text(UPDATE_CACHE_FILE, json.dumps(data, ensure_ascii=False, indent=2))
     except Exception:
         pass
 
@@ -2687,11 +2887,7 @@ def cached_update_report():
 
 def _atomic_kitty_release_cache(data):
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        tmp = KITTY_RELEASE_CACHE_FILE.with_name(KITTY_RELEASE_CACHE_FILE.name + f".tmp-{os.getpid()}")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, KITTY_RELEASE_CACHE_FILE)
+        _secure_write_text(KITTY_RELEASE_CACHE_FILE, json.dumps(data, ensure_ascii=False, indent=2))
     except Exception:
         pass
 
@@ -2934,7 +3130,7 @@ def download_kitty_update():
             pass
         shutil.copyfile(temp_path, target_tmp)
         os.chmod(target_tmp, 0o644)
-        os.replace(target_tmp, target)
+        replace_file(target_tmp, target)
 
         return {
             "ok": True,
@@ -3796,13 +3992,16 @@ def main():
     msg = read_message()
     if msg is None:
         return
+    if not isinstance(msg, dict):
+        send_message({"ok": False, "code": "invalid_request", "error": "Requête native invalide."})
+        return
     action = msg.get("action")
     CURRENT_ACTION = str(action or "")
     client = msg.get("client")
     compatibility = client_report(client, APP_VERSION)
 
     safe_when_incompatible = {
-        "status", "get_settings", "diagnostics", "compatibility", "check_updates",
+        "status", "get_settings", "diagnostics", "compatibility", "runtime_check", "check_updates",
         "check_kitty_update", "download_kitty_update", "open_logs", "youtube_auth_status",
     }
     if isinstance(client, dict) and not compatibility.get("compatible") and action not in safe_when_incompatible:
@@ -3816,6 +4015,8 @@ def main():
 
     if action == "status":
         send_message({"ok": True, "state": repair_state()})
+    elif action == 'refresh_source':
+        send_message(refresh_source(msg.get('job_id'), msg.get('nonce'), msg.get('media_source')))
     elif action == "download":
         url = msg.get("url")
         mode = msg.get("mode", "1080")
@@ -3823,7 +4024,12 @@ def main():
             send_message({"ok": False, "code": "invalid_url", "error": "URL invalide."})
         else:
             repair_state()
-            send_message(enqueue(url, mode, force=bool(msg.get("force"))))
+            send_message(enqueue(url, mode, force=bool(msg.get("force")),
+                                 media_source=msg.get("media_source"), hls_fallbacks=msg.get("hls_fallbacks"), media_fallbacks=msg.get("media_fallbacks"), automatic=msg.get("automatic", False), media_item=msg.get("media_item"), track_selection=msg.get('track_selection')))
+    elif action == "media_item_probe":
+        send_message(probe_media_item(msg.get("url"), msg.get("media_item"), msg.get('media_sources')))
+    elif action in ("hls_probe", "media_probe"):
+        send_message(probe_hls(msg.get("media_source")))
     elif action == "download_playlist":
         url = msg.get("url")
         mode = msg.get("mode", "1080")
@@ -3869,6 +4075,10 @@ def main():
         send_message(diagnostics(deep=bool(msg.get("deep", False)), client=client))
     elif action == "compatibility":
         send_message({"ok": True, "compatibility": compatibility})
+    elif action == "runtime_check":
+        from runtime_check import check_runtime
+        packages = INSTALL_DIR.parent / 'packages' if WINDOWS else None
+        send_message(check_runtime(packages))
     elif action == "check_updates":
         send_message({
             "ok": True,
@@ -3889,7 +4099,7 @@ def main():
         try:
             send_message(youtube_auth_start())
         except Exception as exc:
-            send_message({"ok": False, "error": str(exc)})
+            send_message({"ok": False, "code": getattr(exc, "code", "backend_error"), "error": str(exc)})
     elif action == "youtube_auth_set_enabled":
         send_message(set_youtube_auth_enabled(msg.get("enabled")))
     elif action == "youtube_auth_delete":
@@ -3904,3 +4114,5 @@ if __name__ == "__main__":
         send_message({"ok": False, "code": "queue_state_unavailable", "error": str(exc)})
     except OSError as exc:
         send_message({"ok": False, "code": "backend_io_failed", "error": str(exc)})
+    except Exception as exc:
+        send_message({"ok": False, "code": getattr(exc, "code", "backend_error"), "error": str(exc)})

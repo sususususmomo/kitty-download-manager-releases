@@ -43,7 +43,7 @@ UNINSTALL_BIN = BIN_DIR / "kitty-uninstall"
 BACKEND_FILES = (
     "host.py",
     "worker.py",
-    "image_download.py",
+    "image_download.py", "hls.py", "metadata_guard.py", "runtime_check.py", "download_planner.py", "request_context.py", "source_refresh.py", "media_tracks.py", "media_item.py", "direct_media.py",
     "metadata.py",
     "errors.py",
     "app_paths.py",

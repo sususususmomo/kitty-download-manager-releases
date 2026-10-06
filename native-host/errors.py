@@ -14,6 +14,28 @@ from app_paths import APP_NAME, APP_SLUG
 
 
 CATALOG = {
+    "process_access_denied": ("Vérification des processus refusée", "Ferme le Firefox dédié puis réessaie. Si l'erreur persiste, vérifie les droits et la protection Windows avec Diagnose.cmd.", True),
+    'process_support_invalid': ('Support des processus indisponible', 'Réinstalle le backend Kitty pour restaurer psutil.', False),
+    'track_unavailable': ('Piste demandée indisponible', 'Choisis une piste disponible pour ce média.', False),
+    'source_identity_unconfirmed': ('Nouvelle résolution nécessaire', 'Le fichier partiel est conservé. Recharge la page source : Kitty doit confirmer la même ressource avant de reprendre.', True),
+    'direct_expired': ('URL média expirée', 'Recharge la page et relance la lecture pour détecter une nouvelle source.', True),
+    'direct_access_denied': ('Accès refusé au média direct', 'Le contexte disponible ne suffit pas. Relance la lecture sur la page source.', True),
+    'direct_unavailable': ('Média direct indisponible', 'Recharge la page source et vérifie que le média est encore lisible.', True),
+    'direct_no_formats': ('Aucun format direct utilisable', 'Le serveur ne fournit aucun fichier média exploitable.', False),
+    'direct_partial': ('La source fournit seulement un fragment média', 'Choisis le manifest HLS/DASH ou relance la lecture.', False),
+    'direct_drm': ('Média direct protégé / DRM', 'Kitty ne télécharge pas les médias protégés.', False),
+    'dash_expired': ('Manifest DASH expiré', 'Recharge la page et relance la lecture pour détecter un nouveau manifest.', True),
+    'dash_access_denied': ('Accès refusé par le serveur DASH', 'Le contexte disponible ne suffit pas. Relance la lecture sur la page source.', True),
+    'dash_unavailable': ('Flux DASH indisponible', 'Recharge la page source et vérifie que la vidéo est encore lisible.', True),
+    'dash_no_formats': ('Aucun format DASH utilisable', 'Ce manifest ne fournit aucun format DASH accessible.', False),
+    'dash_drm': ('Flux DASH protégé / DRM', 'Kitty ne télécharge pas les flux DASH protégés.', False),
+    'metadata_timeout': ('Analyse des métadonnées trop longue', 'La source ne répond pas assez vite. Relance la lecture puis réessaie.', True),
+    'processing_timeout': ('Traitement FFmpeg trop long', 'Réessaie ou choisis un autre format.', True),
+    'hls_expired': ('Manifest HLS expiré', 'Recharge la page et relance la lecture pour détecter un nouveau manifest.', True),
+    'hls_access_denied': ('Accès refusé par le serveur HLS', 'Le contexte disponible ne suffit pas. Relance la lecture sur la page source.', True),
+    'hls_unavailable': ('Flux HLS indisponible', 'Recharge la page source et vérifie que la vidéo est encore lisible.', True),
+    'hls_no_formats': ('Aucun format HLS utilisable', 'Ce manifest ne fournit aucun format HLS accessible.', False),
+
     "image_unavailable": ("Aucune image disponible", "Ce contenu ne fournit aucune miniature ou pochette accessible.", False),
     "image_invalid": ("Fichier image invalide", "Le site n’a pas fourni de fichier image exploitable.", True),
     "no_audio": ("Aucun flux audio disponible", "Ce contenu ne fournit aucun flux audio téléchargeable.", False),
@@ -54,7 +76,7 @@ CATALOG = {
     "active_changed": ("Le téléchargement actif a changé", "Actualise l’état puis réessaie.", True),
     "active_pause_disabled": ("Pause du téléchargement actif indisponible", "Kitty Download Manager désactive cette pause pour éviter les reprises HTTP instables.", False),
     "folder_open_failed": ("Impossible d’ouvrir le dossier", "Aucun gestionnaire de fichiers compatible n’a pu être lancé.", False),
-    "logs_open_failed": ("Impossible d’ouvrir les logs", "Ouvre manuellement ~/.cache/kitty-download-manager/worker.log.", False),
+    "logs_open_failed": ("Impossible d’ouvrir les logs", "Ouvre le fichier worker.log au chemin indiqué dans le diagnostic Kitty.", False),
     "postprocess_failed": ("Traitement final impossible", "ffmpeg n’a pas pu finaliser ou convertir le média.", True),
     "metadata_failed": ("Métadonnées indisponibles", "Le titre n’a pas pu être récupéré.", True),
     "extraction_failed": ("Impossible d’analyser ce contenu", "Le site a changé ou yt-dlp n’a pas pu extraire les informations du média.", True),
@@ -113,6 +135,8 @@ def classify_backend_error(
 
     if code_hint in FLOW_CODE_MAP:
         return _entry(FLOW_CODE_MAP[code_hint], detail)
+    if code_hint in CATALOG:
+        return _entry(code_hint, detail)
 
     business = (
         ("seuls les téléchargements en erreur", "retry_not_error"),
@@ -130,6 +154,9 @@ def classify_backend_error(
         if needle in text:
             return _entry(code, detail)
 
+    if 'psutil' in text and _contains(text, 'no module named', 'has no attribute', 'api absente', 'invalide', 'empreinte incorrecte', 'fichier manquant'):
+        return _entry('process_support_invalid', detail)
+
     if _contains(text, "no space left on device", "errno 28", "disk quota exceeded", "insufficient disk space"):
         return _entry("disk_full", detail)
 
@@ -145,7 +172,9 @@ def classify_backend_error(
     if _contains(text, "ffprobe not found", "ffprobe is not installed", "ffprobe introuvable", "ffprobe est requis", "unable to find ffprobe"):
         return _entry("ffprobe_missing", detail)
 
-    if _contains(text, "no module named 'yt_dlp'", 'no module named "yt_dlp"', "yt-dlp python est introuvable"):
+    if _contains(text, "no module named 'yt_dlp'", 'no module named "yt_dlp"',
+                 "no module named 'yt_dlp.", 'no module named "yt_dlp.',
+                 "no module named 'yt_dlp_ejs", 'no module named "yt_dlp_ejs', "yt-dlp python est introuvable"):
         return _entry("ytdlp_missing", detail)
 
     if "worker introuvable" in text:
@@ -283,6 +312,17 @@ def classify_backend_error(
         return _entry("backend_error", detail, message_override=detail.rstrip("."))
 
     return _entry("backend_error", detail or "Erreur backend sans détail.")
+
+
+def redact_error_detail(raw):
+    """Keep technical diagnostics without signed URLs or session headers."""
+    detail = str(raw or '')[:4000]
+    detail = re.sub(r'https?://[^\s\"\'<>]+', '[URL masquée]', detail, flags=re.I)
+    detail = re.sub(r'(?im)\b(authorization|cookie|set-cookie|x-api-key)\s*[:=][^\r\n]+',
+                    r'\1: [masqué]', detail)
+    detail = re.sub(r'(?i)\b(token|signature|sig|api_key)\s*=\s*[^\s&;]+',
+                    r'\1=[masqué]', detail)
+    return detail
 
 
 def normalize_error_payload(

@@ -1257,8 +1257,8 @@ def test_source_capsule_dom_stability_contract():
 
     check("function updateSourceHost" in popup, "helper capsule stable absent")
     check("host.dataset.sourceSignature === signature" in popup, "signature capsule absente")
-    check("updateSourceHost(activeSourceEl, active.url, source)" in popup, "source active toujours recréée")
-    check("updateSourceHost(activeSourceEl, last.url, source)" in popup, "dernier résultat toujours recréé")
+    check("updateSourceHost(activeSourceEl, jobSourceUrl(active), source)" in popup, "source active toujours recréée")
+    check("updateSourceHost(activeSourceEl, jobSourceUrl(last), source)" in popup, "dernier résultat toujours recréé")
     check("clearSourceHost(activeSourceEl)" in popup, "source active non nettoyée")
 
     start = popup.index("function renderActive")
@@ -1310,9 +1310,9 @@ def test_source_capsule_click_target_is_whole_badge():
 
     check('button.dataset.openSource = safe' in popup, "capsule sans URL source")
     check('event.target.closest?.("[data-open-source]")' in popup, "clic capsule entier non délégué")
-    check("updateSourceHost(activeSourceEl, active.url, source)" in popup, "actif n’utilise pas la capsule unique")
-    check("sourceButtonElement(job.url, source)" in popup, "queue n’utilise pas la capsule unique")
-    check("updateSourceHost(activeSourceEl, last.url, source)" in popup, "dernier job n’utilise pas la capsule unique")
+    check("updateSourceHost(activeSourceEl, jobSourceUrl(active), source)" in popup, "actif n’utilise pas la capsule unique")
+    check("sourceButtonElement(jobSourceUrl(job), source)" in popup, "queue n’utilise pas la capsule unique")
+    check("updateSourceHost(activeSourceEl, jobSourceUrl(last), source)" in popup, "dernier job n’utilise pas la capsule unique")
 
 
 def test_source_icons_and_clickable_source_contract():

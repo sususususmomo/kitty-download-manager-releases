@@ -52,7 +52,8 @@ def atomic_bytes(path, content):
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp, path)
+        from platform_support import replace_file
+        replace_file(temp, path)
     finally:
         temp.unlink(missing_ok=True)
 

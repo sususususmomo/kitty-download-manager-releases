@@ -5,6 +5,7 @@ Python dependencies. This module never installs over a system Python.
 """
 from __future__ import annotations
 import argparse
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -19,11 +20,12 @@ import uuid
 
 NATIVE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(NATIVE_DIR))
+from platform_support import replace_file
 from installer_support import (check_private_path, atomic_bytes, atomic_json, verified_download,
                                safe_extract, native_query, checked_version_path, current_install,
                                paused_maintenance, source_backend_version)
 
-BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "errors.py", "app_paths.py",
+BACKEND_FILES = ("host.py", "worker.py", "metadata.py", "image_download.py", "hls.py", "metadata_guard.py", "download_planner.py", "request_context.py", "source_refresh.py", "media_tracks.py", "media_item.py", "direct_media.py", "errors.py", "app_paths.py", "runtime_check.py",
                  "compatibility.py", "runtime_storage.py", "queue_store.py", "platform_support.py",
                  "windows_install.py", "installer_support.py")
 HOST_NAME = "com.kitty.download_manager"
@@ -35,7 +37,8 @@ MAX_DOWNLOAD = 350 * 1024 * 1024
 
 
 def app_root():
-    return Path(os.environ["LOCALAPPDATA"]) / APP_ID
+    from app_paths import windows_root
+    return windows_root()
 
 
 def github_binary(repo, asset_name, stage, executable_names):
@@ -127,18 +130,31 @@ def register(root, version):
 def commit_install(root, stage, version, *, register_host=True, validate=None):
     """Publish a tested version; restore launcher, extension and registry on failure."""
     root, stage = Path(root), Path(stage)
-    version_dir = root / "versions" / f"{version}-{uuid.uuid4().hex}"
-    version_dir.parent.mkdir(exist_ok=True)
-    check_private_path(version_dir.parent)
-    files = ("native-host.bat", f"{HOST_NAME}.json", "current.json", "Uninstall.cmd")
+    versions = check_private_path(root / "versions")
+    versions.mkdir(exist_ok=True)
+    # Prepare in the final, unique directory, without making it current yet.
+    # Windows may deny a directory rename after Python/DLL or antivirus access.
+    # Older callers using stage-* are copied, never renamed, for the same reason.
+    in_place = stage.parent == versions and re.fullmatch(re.escape(version) + r"-[0-9a-f]{32}", stage.name)
+    version_dir = stage if in_place else versions / f"{version}-{uuid.uuid4().hex}"
+    check_private_path(version_dir)
+    files = ("native-host.bat", f"{HOST_NAME}.json", "current.json", "Uninstall.cmd", "installation.json")
     saved = {name: (root / name).read_bytes() if (root / name).exists() else None for name in files}
+    if saved["current.json"]:
+        try:
+            active_directory = json.loads(saved["current.json"]).get("directory")
+        except (ValueError, AttributeError):
+            active_directory = None
+        if active_directory == version_dir.relative_to(root).as_posix():
+            raise RuntimeError("Preparation dans la version active refusee.")
     registry = snapshot_registry() if register_host else []
     old_extension = root / f"extension-backup-{uuid.uuid4().hex}"
     extension = root / "extension"
     moved_extension = False
     published_extension = False
-    os.replace(stage, version_dir)
     try:
+        if not in_place:
+            shutil.copytree(stage, version_dir)
         if validate:
             validate(version_dir)
         relative = version_dir.relative_to(root).as_posix()
@@ -154,13 +170,14 @@ def commit_install(root, stage, version, *, register_host=True, validate=None):
         if (version_dir / "extension").is_dir():
             if extension.exists():
                 check_private_path(extension)
-                os.replace(extension, old_extension)
+                replace_file(extension, old_extension)
                 moved_extension = True
             published_extension = True
             shutil.copytree(version_dir / "extension", extension)
         atomic_bytes(root / "native-host.bat", launcher.encode("utf-8"))
         atomic_json(root / f"{HOST_NAME}.json", manifest)
         atomic_bytes(root / "Uninstall.cmd", uninstaller.encode("utf-8"))
+        atomic_json(root / "installation.json", {"app": APP_ID})
         if register_host:
             register(root, version)
         atomic_json(root / "current.json", {"app": APP_ID, "version": version, "directory": relative,
@@ -169,7 +186,7 @@ def commit_install(root, stage, version, *, register_host=True, validate=None):
         if published_extension or (extension.exists() and moved_extension):
             shutil.rmtree(extension, ignore_errors=True)
         if moved_extension:
-            os.replace(old_extension, extension)
+            replace_file(old_extension, extension)
         for name, data in saved.items():
             if data is None:
                 (root / name).unlink(missing_ok=True)
@@ -184,14 +201,50 @@ def commit_install(root, stage, version, *, register_host=True, validate=None):
     return version_dir
 
 
+@contextmanager
+def relocated_state(old_root, new_root):
+    """Copy paused state, retaining the original installation on any failure."""
+    old_root, new_root = Path(old_root), Path(new_root)
+    copied = []
+    try:
+        for name in ("config", "cache"):
+            source, destination = old_root / name, new_root / name
+            if destination.exists():
+                raise RuntimeError("La destination contient deja des donnees Kitty; deplacement refuse.")
+            if source.exists():
+                check_private_path(source)
+                for path in source.rglob("*"):
+                    check_private_path(path)
+                copied.append(destination)
+                # Lock/maintenance/PID controls belong to the original runtime.
+                def ignore(_directory, names):
+                    return [n for n in names if n.endswith(".lock") or n in
+                            ("maintenance.json", "controls", "youtube-auth-pending.json")]
+                shutil.copytree(source, destination, ignore=ignore)
+        yield
+    except BaseException:
+        for path in copied:
+            shutil.rmtree(path, ignore_errors=True)
+        raise
+
+
 def install(args):
-    root = check_private_path(app_root())
-    source, stage = Path(args.source).resolve(), check_private_path(Path(args.stage).resolve())
-    if stage.parent != root or not re.fullmatch(r"stage-[0-9a-f]{32}", stage.name):
-        raise RuntimeError("Dossier de preparation inattendu.")
+    root = check_private_path(Path(getattr(args, "root", None) or app_root()).absolute()).resolve()
+    old_root = getattr(args, "previous_root", None)
+    old_root = check_private_path(Path(old_root).absolute()).resolve() if old_root else root
+    if old_root != root and (root in old_root.parents or old_root in root.parents):
+        raise RuntimeError("Dossiers Kitty imbriques; deplacement refuse.")
+    source, stage = Path(args.source).resolve(), check_private_path(Path(args.stage).absolute()).resolve()
     version = source_backend_version(source)
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version):
         raise RuntimeError("Version invalide.")
+    legacy_stage = stage.parent == root and re.fullmatch(r"stage-[0-9a-f]{32}", stage.name)
+    prepared_version = stage.parent == root / "versions" and re.fullmatch(re.escape(version) + r"-[0-9a-f]{32}", stage.name)
+    if not (legacy_stage or prepared_version):
+        raise RuntimeError("Dossier de preparation inattendu.")
+    previous = current_install(root)
+    if previous and checked_version_path(root, previous) == stage:
+        raise RuntimeError("Preparation dans la version active refusee.")
     backend = stage / "backend"
     backend.mkdir()
     for filename in BACKEND_FILES:
@@ -213,24 +266,33 @@ def install(args):
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
             if result.returncode:
                 raise RuntimeError(f"Executable {executable} invalide.")
-    python = stage / "runtime/python.exe"
-    print("Verification du protocole Firefox...", flush=True)
+    print("Verification des paquets Python et du protocole Firefox...", flush=True)
     def validate_runtime(path):
         query_python = path / "runtime/python.exe"
         query_backend = path / "backend"
+        native_query(query_python, query_backend, "runtime_check")
         native_query(query_python, query_backend, "get_settings")
         report = native_query(query_python, query_backend, "compatibility")
         if report.get("compatibility", {}).get("backend_version") != version:
             raise RuntimeError("Versions de l’extension et du backend differentes; installation refusee.")
-    validate_runtime(stage)
-    sys.path.insert(0, str(backend))
     from queue_store import queue_lock
-    with queue_lock(root / "install.lock"):
+    with ExitStack() as transaction:
+        for location in sorted({root, old_root}, key=lambda p: str(p).casefold()):
+            transaction.enter_context(queue_lock(location / "install.lock"))
         previous = current_install(root)
-        if previous and tuple(map(int, previous["version"].split('.'))) > tuple(map(int, version.split('.'))):
-            raise RuntimeError("Downgrade refuse; utiliser une version au moins aussi recente.")
-        with paused_maintenance(root, previous):
-            commit_install(root, stage, version, register_host=not args.no_register, validate=validate_runtime)
+        original = current_install(old_root) if old_root != root else previous
+        if old_root != root and (previous or original is None):
+            raise RuntimeError("Deplacement refuse : source non reconnue ou destination deja installee.")
+        for installed in (previous, original):
+            if installed and tuple(map(int, installed["version"].split('.'))) > tuple(map(int, version.split('.'))):
+                raise RuntimeError("Downgrade refuse; utiliser une version au moins aussi recente.")
+        if old_root != root:
+            transaction.enter_context(paused_maintenance(old_root, original))
+            transaction.enter_context(relocated_state(old_root, root))
+        transaction.enter_context(paused_maintenance(root, previous))
+        commit_install(root, stage, version, register_host=not args.no_register, validate=validate_runtime)
+    if old_root != root:
+        print("Emplacement modifie. L’ancien dossier est conserve; Firefox utilise desormais le nouveau.", flush=True)
     print("Backend installe. Configuration, historique et telechargements conserves.", flush=True)
     print("La file est en pause; reprendre depuis Kitty apres le rechargement de l’extension.", flush=True)
 
@@ -324,6 +386,8 @@ def main():
     setup = sub.add_parser("install")
     setup.add_argument("--source", required=True)
     setup.add_argument("--stage", required=True)
+    setup.add_argument("--root", help="Dossier d’installation choisi")
+    setup.add_argument("--previous-root", help="Installation precedente a migrer")
     setup.add_argument("--no-dependencies", action="store_true", help=argparse.SUPPRESS)
     setup.add_argument("--no-register", action="store_true", help=argparse.SUPPRESS)
     sub.add_parser("uninstall")

@@ -51,6 +51,9 @@ class InstalledWindowsTests(unittest.TestCase):
         import winreg
         root = windows_install.app_root()
         self.query_launcher("get_settings")
+        runtime = self.query_launcher('runtime_check')
+        self.assertTrue(runtime['integrity']['ok'])
+        self.assertGreater(runtime['integrity']['checked'], 100)
         diagnostics = self.query_launcher("diagnostics")
         self.assertEqual(diagnostics["dependencies"]["required_missing"], [])
         for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
@@ -62,7 +65,9 @@ class InstalledWindowsTests(unittest.TestCase):
         root = windows_install.app_root()
         previous = windows_install.current_install(root)
         version_dir = windows_install.checked_version_path(root, previous)
-        stage = root / ("stage-" + uuid.uuid4().hex)
+        # Match Install.ps1: test an unpublished directory at the final path,
+        # including preservation after the validating child interpreter exits.
+        stage = root / 'versions' / (windows_install.source_backend_version(SOURCE) + '-' + uuid.uuid4().hex)
         stage.mkdir()
         for name in ("runtime", "packages", "bin"):
             shutil.copytree(version_dir / name, stage / name)
@@ -78,6 +83,8 @@ class InstalledWindowsTests(unittest.TestCase):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertNotEqual(windows_install.current_install(root)["directory"], previous["directory"])
+        self.assertEqual(windows_install.checked_version_path(root, windows_install.current_install(root)), stage)
+        self.assertTrue((stage / 'runtime/python.exe').exists())
         self.assertEqual(settings.read_bytes() if settings.exists() else None, original)
         state = self.query_launcher("status")["state"]
         self.assertTrue(state["queue_paused"])
