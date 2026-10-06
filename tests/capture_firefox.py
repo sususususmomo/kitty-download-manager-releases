@@ -395,10 +395,12 @@ def run():
         # A future-release example checks the single contextual download action
         # only; the CI never downloads or executes this example archive.
         suffix = "-macos" if sys.platform == "darwin" else "-windows-x64"
-        queue_store.atomic_json(release_cache, {"ok": True, "current_version": "8.31", "latest_version": "8.40", "state": "up_to_date", "update_available": False, "download_supported": True, "asset_sha256": "0" * 64, "asset_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v8.40/kitty-download-manager-v8.40{suffix}.zip", "checked_at": time.time()})
+        installed_version = json.loads((SOURCE / "backend.json").read_text())["version"]
+        future_version = str(int(installed_version.split(".")[0]) + 1) + ".0"
+        queue_store.atomic_json(release_cache, {"ok": True, "current_version": installed_version, "latest_version": future_version, "state": "up_to_date", "update_available": False, "download_supported": True, "asset_sha256": "0" * 64, "asset_url": f"https://github.com/sususususmomo/kitty-download-manager-releases/releases/download/v{future_version}/kitty-download-manager-v{future_version}{suffix}.zip", "checked_at": time.time()})
         command("click", selector="#backToMain")
         command("click", selector="#openSettings")
-        newer = wait_state(lambda state: state.get("backendDownloadVisible") and "8.40" in state.get("backendDownloadText", ""))
+        newer = wait_state(lambda state: state.get("backendDownloadVisible") and future_version in state.get("backendDownloadText", ""))
         if newer.get("backendCheckVisible") or newer.get("backendRetryVisible") or newer.get("backendDownloadMode") != "update" or newer.get("backendIconState") != "warning":
             raise RuntimeError(f"Actions backend redondantes : {newer}")
         command("scroll", selector='[data-settings-section="backend"]')

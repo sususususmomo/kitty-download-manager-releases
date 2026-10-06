@@ -29,7 +29,7 @@ class NativeWindowsAudit(unittest.TestCase):
  def setUpClass(cls):
   platform_support.configure_worker_job()
   cls.temp=tempfile.TemporaryDirectory(prefix='kitty-native-audit-')
-  cls.root=Path(cls.temp.name)/'Kitty français & 100% !'
+  cls.root=Path(cls.temp.name).resolve()/'Kitty français & 100% !'
   cls.root.mkdir()
   installed=windows_install.app_root()
   current=windows_install.checked_version_path(installed,windows_install.current_install(installed))

@@ -23,7 +23,9 @@ class LocationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        # Windows TEMP can use the RUNNER~1 short alias; production resolves
+        # the same directory to its long name before storing install paths.
+        self.base = Path(self.temp.name).resolve()
         self.root = self.base / 'autre disque' / 'Kitty Français & 100% !'
         self.root.mkdir(parents=True)
         # No active process in these fixtures; process-control cases live in
