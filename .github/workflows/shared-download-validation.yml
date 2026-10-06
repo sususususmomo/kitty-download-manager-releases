@@ -48,11 +48,20 @@ jobs:
           'C:\ProgramData\chocolatey\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - run: |
           node tests/test-pill-download.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test-pill-ui.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test-popup-tracks.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-windows-port.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-media-tracks.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-media-track-download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-media-item-download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-automatic-download.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test-backend-packaging.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

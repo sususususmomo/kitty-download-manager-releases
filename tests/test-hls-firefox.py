@@ -226,6 +226,12 @@ window.qa=async function(action,args={}) {
 
   value('prepare',mode='1080' if GROUPS else '720');original_tab=value('tab',url=test.base+'/unsupported');time.sleep(.5)
   if EQUIVALENCE:
+   def clear_equivalence_history():
+    # Let the visible pill consume completion before removing that job from
+    # history. Clearing it first can strand its test-only tracked job ID.
+    value('close');value('activate')
+    wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'))
+    value('native',payload={'action':'clear_history'})
    report['pairs']=[]
    for style in ('minimal','cat','classic'):
     for language in ('fr','en'):
@@ -242,7 +248,7 @@ window.qa=async function(action,args={}) {
      first_payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
      assert first_streams[0]['codec_name']=='mp3' and {t['codec_type'] for t in first_streams}=={'audio'},first_streams
      assert first['download_plan']['audioLanguage']=='fr' and first['download_plan']['subtitleLanguages']==['fr'],first
-     value('native',payload={'action':'clear_history'});value('close');time.sleep(.3)
+     clear_equivalence_history();value('close');time.sleep(.3)
      wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill')
      second=wait(finished);second_streams=streams(second)
      second_payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
@@ -252,18 +258,18 @@ window.qa=async function(action,args={}) {
      report['pairs'].append({'style':style,'language':language,'requestsIdentical':True,'closedPopup':True,
         'popupCodec':first_streams[0]['codec_name'],'pillCodec':second_streams[0]['codec_name'],
         'audioLanguage':second['download_plan']['audioLanguage'],'subtitleLanguages':second['download_plan']['subtitleLanguages']})
-     value('native',payload={'action':'clear_history'})
+     clear_equivalence_history()
    for mode,height in (('720',720),('best',1080)):
     value('open');wait(lambda:len(value('tracks')['audio'])==3);value('mode-click',mode=mode)
     value('preferences');value('download');video_popup=wait(finished);video_streams=streams(video_popup)
     payload=[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
     assert next(t['height'] for t in video_streams if t['codec_type']=='video')==height,video_streams
-    value('native',payload={'action':'clear_history'});value('close');wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill')
+    clear_equivalence_history();value('close');wait(lambda:value('pill-state') in ('idle','finished','duplicate','error'));value('pill')
     video_pill=wait(finished);pill_streams=streams(video_pill)
     assert next(t['height'] for t in pill_streams if t['codec_type']=='video')==height,pill_streams
     assert payload==[r['payload'] for r in value('diagnostics',full=True)['requests'] if r.get('payload')][-1]
     report['checks'].append('Popup and pill both produce '+str(height)+'p video with audio and captions for mode '+mode)
-    value('native',payload={'action':'clear_history'})
+    clear_equivalence_history()
    value('open');wait(lambda:len(value('tracks')['audio'])==3);value('mode-click',mode='mp3');value('preferences');value('close')
    # A new audio-only page has no subtitle options. Preferences survive, and
    # the native planner adapts the actual tracks before converting to MP3.
