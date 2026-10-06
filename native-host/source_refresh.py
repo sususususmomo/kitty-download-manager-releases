@@ -165,7 +165,7 @@ class SourceRefresh:
         self.ledger = {'direct': {}, 'hls': {}, 'dash': {}, 'segments': {}}
         if checkpoint and checkpoint.is_file():
             try:
-                self.ledger = json.loads(checkpoint.read_text())
+                self.ledger = json.loads(checkpoint.read_text(encoding='utf-8'))
             except (ValueError, OSError):
                 reject()
         self.mapping, self.playlists = {}, {}

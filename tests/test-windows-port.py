@@ -276,7 +276,8 @@ class InstallerTests(unittest.TestCase):
                 raise PermissionError(13, "occupe")
         fake = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=locking)
         with (self.root / "lock").open("a+") as handle, patch.object(platform_api, "WINDOWS", True), \
-             patch.dict(sys.modules, {"msvcrt": fake}), patch.object(time, "sleep"):
+             patch.dict(sys.modules, {"msvcrt": fake}), patch.object(time, "sleep"), \
+             patch.object(platform_api.os, "write", side_effect=AssertionError("Never write before owning the lock")):
             platform_api.acquire_file_lock(handle)
             platform_api.release_file_lock(handle)
         self.assertEqual(calls, [(1, 1, 0), (1, 1, 0), (2, 1, 0)])

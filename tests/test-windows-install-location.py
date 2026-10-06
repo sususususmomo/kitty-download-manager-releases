@@ -75,13 +75,13 @@ class LocationTests(unittest.TestCase):
             installer.install(self.args(self.stage()))
         current = installer.current_install(self.root)
         self.assertNotEqual(first['directory'], current['directory'])
-        state = json.loads((self.root / 'cache/queue.json').read_text())
+        state = json.loads((self.root / 'cache/queue.json').read_text(encoding="utf-8"))
         self.assertEqual(state['history'][0]['id'], 'keep-history')
         self.assertTrue(state['queue_paused'])
         self.assertEqual((self.root / 'config/cookies.txt').read_bytes(), b'keep-cookie')
-        manifest = json.loads((self.root / (installer.HOST_NAME + '.json')).read_text())
+        manifest = json.loads((self.root / (installer.HOST_NAME + '.json')).read_text(encoding="utf-8"))
         self.assertEqual(manifest['path'], str(self.root / 'native-host.bat'))
-        self.assertEqual(json.loads((self.root / 'installation.json').read_text())['app'], installer.APP_ID)
+        self.assertEqual(json.loads((self.root / 'installation.json').read_text(encoding="utf-8"))['app'], installer.APP_ID)
 
     def test_prepared_version_is_validated_before_activation_and_never_moved(self):
         with patch.object(installer, 'native_query', side_effect=self.query), redirect_stdout(io.StringIO()):
@@ -148,7 +148,7 @@ class LocationTests(unittest.TestCase):
             installer.install(self.args(self.stage(), old))
         self.assertEqual((self.root / 'config/settings.json').read_bytes(), settings)
         self.assertEqual((self.root / 'config/cookies.txt').read_bytes(), b'keep-cookie')
-        self.assertEqual(json.loads((self.root / 'cache/queue.json').read_text())['history'][0]['id'], 'keep-history')
+        self.assertEqual(json.loads((self.root / 'cache/queue.json').read_text(encoding="utf-8"))['history'][0]['id'], 'keep-history')
         self.assertTrue((old / 'current.json').exists())
         self.assertTrue((old / 'config/cookies.txt').exists())
         self.assertFalse((old / 'cache/maintenance.json').exists())

@@ -64,8 +64,8 @@ def acquire_file_lock(handle):
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         return
     import msvcrt
-    if os.fstat(handle.fileno()).st_size == 0:
-        os.write(handle.fileno(), b"\0")
+    # Windows can lock beyond EOF. Writing an initial byte before acquiring
+    # the lock races with another handle that has already locked byte zero.
     while True:
         os.lseek(handle.fileno(), 0, os.SEEK_SET)
         try:

@@ -143,6 +143,17 @@ class WindowsAuditTests(unittest.TestCase):
                 self.assertEqual(host.load_settings(), {f'preference-{i}':i for i in range(24)})
                 self.assertEqual(list(root.glob('*.tmp')), [])
 
+    def test_unicode_resume_checkpoint_keeps_original_keys(self):
+        from source_refresh import SourceRefresh
+        from queue_store import atomic_json
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / 'reprise française.json'
+            ledger = {'direct': {'https://example.test/épisode': ['étiquette', 100]},
+                      'hls': {}, 'dash': {}, 'segments': {}}
+            atomic_json(checkpoint, ledger)
+            resumed = SourceRefresh({'formats': []}, None, lambda *_: None, checkpoint=checkpoint)
+            self.assertEqual(resumed.ledger, ledger)
+
     def test_unreadable_preferences_are_never_overwritten_with_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

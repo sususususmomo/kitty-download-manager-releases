@@ -33,7 +33,7 @@ class NativeWindowsAudit(unittest.TestCase):
   cls.root.mkdir()
   installed=windows_install.app_root()
   current=windows_install.checked_version_path(installed,windows_install.current_install(installed))
-  version=json.loads((SOURCE/'backend.json').read_text())['version']
+  version=json.loads((SOURCE/'backend.json').read_text(encoding="utf-8"))['version']
   prepared=cls.root/'versions'/(version+'-'+uuid.uuid4().hex)
   prepared.mkdir(parents=True)
   for directory in ('runtime','packages','bin','backend'):
@@ -45,7 +45,7 @@ class NativeWindowsAudit(unittest.TestCase):
  def tearDownClass(cls): cls.temp.cleanup()
 
  def query(self,action,**values):
-  message={'action':action,'client':{'version':json.loads((SOURCE/'extension/manifest.json').read_text())['version'],'protocol':1},**values}
+  message={'action':action,'client':{'version':json.loads((SOURCE/'extension/manifest.json').read_text(encoding="utf-8"))['version'],'protocol':1},**values}
   payload=json.dumps(message,ensure_ascii=False).encode('utf-8')
   env={**os.environ,'MOZ_HEADLESS':'1'}
   proc=subprocess.run([str(Path(os.environ['SystemRoot'])/'System32/cmd.exe'),'/d','/s','/c',r'.\native-host.bat'],cwd=self.root,
@@ -132,7 +132,7 @@ with YoutubeDL(opts) as ydl:
     close();close=None
     result=future.result(timeout=10)
    self.assertTrue(result['ok'],result)
-   self.assertEqual(json.loads(settings.read_text())['output_dir'],str(self.root/'nouveau dossier'))
+   self.assertEqual(json.loads(settings.read_text(encoding="utf-8"))['output_dir'],str(self.root/'nouveau dossier'))
   finally:
    if close:close()
 
@@ -140,7 +140,7 @@ with YoutubeDL(opts) as ydl:
   import psutil
   started=self.query('youtube_auth_start')
   self.assertTrue(started['ok'],started)
-  pending=json.loads((self.root/'cache/youtube-auth-pending.json').read_text())
+  pending=json.loads((self.root/'cache/youtube-auth-pending.json').read_text(encoding="utf-8"))
   session=self.root/'cache/youtube-auth-sessions'/pending['token']
   profile=session/'profile'
   processes=[]
@@ -182,7 +182,7 @@ with YoutubeDL(opts) as ydl:
    self.assertTrue(completed['ok'],completed)
    self.assertTrue(completed['enabled'])
    self.assertFalse(session.exists())
-   snapshot=(self.root/'config/youtube-auth/cookies.txt').read_text()
+   snapshot=(self.root/'config/youtube-auth/cookies.txt').read_text(encoding="utf-8")
    self.assertIn('.youtube.com',snapshot);self.assertNotIn('.google.com',snapshot)
    self.assertTrue(self.query('youtube_auth_delete')['ok'])
   finally:
@@ -200,7 +200,7 @@ with YoutubeDL(opts) as ydl:
    futures=[pool.submit(self.query,'set_output_dir',output_dir=destination) if i%2 else
             pool.submit(self.query,'youtube_auth_set_enabled',enabled=True) for i in range(24)]
    for future in futures:self.assertTrue(future.result(timeout=45)['ok'])
-  saved=json.loads((self.root/'config/settings.json').read_text())
+  saved=json.loads((self.root/'config/settings.json').read_text(encoding="utf-8"))
   self.assertEqual(saved['output_dir'],destination)
   self.assertTrue(saved['youtube_auth_enabled'])
   self.assertEqual(list((self.root/'config').glob('*.tmp')),[])
