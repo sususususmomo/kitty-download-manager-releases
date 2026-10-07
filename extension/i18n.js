@@ -175,7 +175,7 @@
   "Ajouter au téléchargement": "Add download",
   "Ajouter la playlist": "Add playlist",
   "Annuler": "Cancel",
-  "📁 Dossier": "📁 Folder",
+  "📁 Dossier de téléchargement": "📁 Download folder",
   "File d’attente": "Queue",
   "Historique": "History",
   "Vider la file": "Clear queue",
