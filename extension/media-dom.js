@@ -50,7 +50,8 @@
       const blob=String(el.currentSrc||el.getAttribute('src')||'').startsWith('blob:');
       // TimedMediaHandler's childless placeholder retains this per-file URL,
       // even though the original video and all its <source>s are detached.
-      const resourceUrl=url(el.getAttribute('resource'),base)||url(el.closest('.mw-tmh-player')?.querySelector('a.mw-tmh-play[href]')?.getAttribute('href'),base);
+      const resourceUrl=url(el.getAttribute('resource'),base)||url(el.closest('.mw-tmh-player')?.querySelector('a.mw-tmh-play[href]')?.getAttribute('href'),base)
+        || (isPlayer ? globalThis.KittyMediaResolver?.resolveTikTokMedia?.(el,base) : null);
       const duration=el.duration||Number(el.getAttribute('data-durationhint'));
       const container=el.closest('figure,.gallerybox,.media-card,.video-card,[data-media-item],.mw-tmh-player')||card;
       if(container&&!containers.has(container))containers.set(container,'container-'+(++containerSerial));

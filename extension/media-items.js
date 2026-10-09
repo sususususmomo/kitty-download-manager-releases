@@ -48,6 +48,8 @@
   function providerPage(value) {
     if(!http(value))return null;
     const u=new URL(value),host=u.hostname.toLowerCase();
+    if(host==='tiktok.com'||host.endsWith('.tiktok.com'))
+      return globalThis.KittyMediaResolver?._canonicalizers.tiktok(value)||null;
     if(host==='youtu.be'||host==='youtube.com'||host.endsWith('.youtube.com'))
       return globalThis.KittyMediaResolver?._canonicalizers.youtube(value)||null;
     if((host==='soundcloud.com'||host==='www.soundcloud.com')&&/^\/[^/]+\/[^/]+\/?$/.test(u.pathname)
@@ -249,7 +251,8 @@
         // The URL of a known single-media page belongs to its sole main-frame
         // player. Its extractor knows titles and formats that raw CDN URLs lack.
         // Generic pages and galleries keep each item's own direct/File URL.
-        const provider=item.embedUrl || (logical.length===1&&item.contexts.some(c=>c.frameId===0)?providerPage(page):null);
+        const tiktokResource=item.contexts.map(c=>globalThis.KittyMediaResolver?._canonicalizers.tiktok(c.dom.resourceUrl)).find(Boolean);
+        const provider=item.embedUrl || tiktokResource || (logical.length===1&&item.contexts.some(c=>c.frameId===0)?providerPage(page):null);
         item.preferExtractor=Boolean(provider);
         const resolved=this.metadata.get(item.id);
         if(resolved?.title&&(!item.title||item.preferExtractor)){item.title=resolved.title;item.titleSource="metadata";}
@@ -267,7 +270,8 @@
           container:c.metadata?.format||null,confidence:c.id?.startsWith('dom:')?0.7:1}));
         const scopedResource=item.contexts.map(c=>fileExtractionUrl(c.dom)).find(Boolean);
         const native=item.candidates.find(c=>c.type!=='ytdlp'&&!c.hlsProtected&&c.url);
-        item.extractionUrl=provider || native?.url || scopedResource || (logical.length===1?page:null);
+        const tiktokFeed=/(^|\.)tiktok\.com$/i.test(new URL(page).hostname)&&!providerPage(page);
+        item.extractionUrl=provider || native?.url || scopedResource || (logical.length===1&&!tiktokFeed?page:null);
         // yt-dlp participates for the item's own URL, never the whole gallery.
         if(item.extractionUrl&&!item.candidates.some(c=>c.sourceType==='ytdlp'))item.candidates.unshift({id:'extractor:'+hash(item.extractionUrl),type:'ytdlp',sourceType:'ytdlp',url:item.extractionUrl,title:item.title});
         item.downloadable=Boolean(item.extractionUrl);

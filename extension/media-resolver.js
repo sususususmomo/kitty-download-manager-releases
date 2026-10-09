@@ -85,9 +85,10 @@
   function canonicalTikTokPermalink(rawUrl) {
     const parsed = toHttpUrl(rawUrl);
     if (!parsed || !hostMatches(parsed.hostname, "tiktok.com")) return null;
-    const match = parsed.pathname.match(/^\/@([^/]*)\/video\/(\d+)/i);
-    if (!match) return null;
-    return `https://www.tiktok.com/@${match[1] || "_"}/video/${match[2]}`;
+    const match = parsed.pathname.match(/^\/@([^/]*)\/video\/(\d+)(?:\/|$)/i);
+    if (match) return `https://www.tiktok.com/@${match[1] || "_"}/video/${match[2]}`;
+    const embedded = parsed.pathname.match(/^\/(?:embed\/v2|player\/v1)\/(\d+)(?:\/|$)/i);
+    return embedded ? `https://www.tiktok.com/@_/video/${embedded[1]}` : null;
   }
 
   function canonicalInstagramPermalink(rawUrl) {
@@ -276,11 +277,13 @@
     return visibility * 100 - distance * 28;
   }
 
-  function bestVisibleMedia() {
+  function bestVisibleMedia(preferPlaying = false) {
     let best = null;
     let bestScore = -Infinity;
     for (const media of document.querySelectorAll("video, audio")) {
-      const score = viewportScore(media);
+      const style = preferPlaying ? window.getComputedStyle?.(media) : null;
+      if (style && (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')) continue;
+      const score = viewportScore(media) + (preferPlaying && media.paused === false && !media.ended ? 200 : 0);
       if (score > bestScore) {
         best = media;
         bestScore = score;
@@ -353,6 +356,7 @@
   // ---- TikTok adapter --------------------------------------------------
   const TIKTOK_CONTAINER_SELECTOR = [
     '[data-e2e="recommend-list-item-container"]',
+    '[data-e2e="feed-item"]',
     '[data-cinema-mode-snap-row]',
     '[data-cinema-mode-player-scroller="true"] [data-cinema-mode-snap-row]'
   ].join(", ");
@@ -393,10 +397,11 @@
 
   function extractTikTokUsernameFromContainer(container) {
     if (!container) return null;
+    const videoId = extractTikTokVideoIdFromContainer(container);
 
     for (const link of container.querySelectorAll?.('a[href*="/video/"]') || []) {
       const canonical = canonicalTikTokPermalink(link.href || link.getAttribute("href"));
-      if (!canonical) continue;
+      if (!canonical || videoId && !canonical.endsWith(`/video/${videoId}`)) continue;
       const match = new URL(canonical).pathname.match(/^\/@([^/]+)\/video\//i);
       if (match?.[1] && match[1] !== "_") return match[1];
     }
@@ -416,18 +421,40 @@
 
   function permalinkFromTikTokContainer(container) {
     if (!container) return null;
+    const videoId = extractTikTokVideoIdFromContainer(container);
     for (const link of container.querySelectorAll?.('a[href*="/video/"]') || []) {
       const canonical = canonicalTikTokPermalink(link.href || link.getAttribute("href"));
-      if (canonical) return canonical;
+      // Comment/recommendation links can belong to another post in this card.
+      if (canonical && (!videoId || canonical.endsWith(`/video/${videoId}`))) return canonical;
     }
 
-    const videoId = extractTikTokVideoIdFromContainer(container);
     if (!videoId) return null;
     const username = extractTikTokUsernameFromContainer(container) || "_";
     return `https://www.tiktok.com/@${username}/video/${videoId}`;
   }
 
+  function resolveTikTokMedia(media, pageUrl = location.href) {
+    const page = toHttpUrl(pageUrl);
+    if (!media || !page || !hostMatches(page.hostname, 'tiktok.com')) return null;
+    const card = media.closest?.(TIKTOK_CONTAINER_SELECTOR);
+    if (card && (card.querySelectorAll?.('video') || []).length <= 1) {
+      const permalink = permalinkFromTikTokContainer(card);
+      if (permalink) return permalink;
+    }
+    // Bind each snapshot to this player, never to a different visible card.
+    let node = media;
+    for (let depth = 0; node && depth < MAX_ANCESTOR_DEPTH; depth++, node = node.parentElement) {
+      if ((node.querySelectorAll?.('video') || []).length > 1) break;
+      const permalink = permalinkFromTikTokContainer(node);
+      if (permalink) return permalink;
+    }
+    return null;
+  }
+
   function resolveTikTokFromDom(media) {
+    const own = resolveTikTokMedia(media);
+    if (own) return own;
+    if (media) return null;
     const active = bestVisibleTikTokContainer();
     const direct = permalinkFromTikTokContainer(active);
     if (direct) return direct;
@@ -682,6 +709,15 @@
     }
 
     const started = performance.now?.() ?? Date.now();
+    // TikTok can retain the previous permalink while its SPA changes players.
+    // Prefer the playing/visible post's own DOM identity when it is available.
+    const tiktok = hostMatches(location.hostname, 'tiktok.com')
+      ? resolveTikTokFromDom(bestVisibleMedia(true)) : null;
+    if (tiktok) {
+      const result = makeResult(tiktok, "site-adapter", 96);
+      resolveCache = { key, at: now, value: result };
+      return result;
+    }
     const directKnown = canonicalizeKnownMediaUrl(location.href);
     if (directKnown) {
       const result = makeResult(directKnown, "direct-known", 100);
@@ -759,6 +795,7 @@
     comparableMediaUrl,
     canonicalizeKnownMediaUrl,
     cleanTrackingUrl,
+    resolveTikTokMedia,
     // Exposées pour les tests/diagnostic, sans dépendre du backend.
     _canonicalizers: Object.freeze({
       tiktok: canonicalTikTokPermalink,

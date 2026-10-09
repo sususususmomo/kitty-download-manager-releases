@@ -479,8 +479,19 @@ async function addDownload(message,sender) {
       const response=await browser.tabs.sendMessage?.(tabId,{type:'kitty-media-rescan'});
       if(response?.ok===false)downloadTrace(message,'rescan',{error:response.error||'Snapshot not acknowledged'});
     }catch(error){downloadTrace(message,'rescan',{error:error?.message||String(error)});}
-    const items=await itemsForTab(tabId);
-    const item=items.find(i=>i.id===settings.itemId) || items.find(i=>i.downloadable) || items[0];
+    let items=await itemsForTab(tabId);
+    let item=items.find(i=>i.id===settings.itemId);
+    if(!item && /(^|\.)tiktok\.com$/i.test(new URL(tab.url).hostname)) {
+      downloadTrace(message,'media_selection',{selection:'visible_tiktok'});
+      try {
+        const response=await browser.tabs.sendMessage(tabId,{type:'kitty-media-target'},{frameId:0});
+        items=await itemsForTab(tabId);
+        item=items.find(i=>i.contexts.some(c=>c.frameId===0&&c.dom.domId===response?.target?.domId));
+      }catch(error){downloadTrace(message,'media_selection',{error:error?.message||String(error)});}
+      // A feed with several preloaded players needs an explicit active target.
+      if(!item&&items.length>1)return {ok:false,code:'media_not_detected',error:'Média non détecté sur cette page. Place le média à télécharger au centre de l’écran.'};
+    }
+    item ||= items.find(i=>i.downloadable) || items[0];
     const track_selection=item && Object.hasOwn(settings.trackSelections,item.id)
       ? settings.trackSelections[item.id] : settings.trackPreferences;
     if(item) {

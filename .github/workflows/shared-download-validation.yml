@@ -25,6 +25,9 @@ jobs:
           node tests/test-pill-robust.js
           node tests/test-pill-spa-context.js
           node tests/test-media-context-startup.js
+          node tests/test-tiktok-download.js
+          KITTY_FIREFOX_BINARY="$RUNNER_TEMP/firefox/firefox" KITTY_GECKODRIVER="$RUNNER_TEMP/geckodriver" python tests/test-tiktok-firefox.py
+          python tests/test-tiktok-native.py
           KITTY_FIREFOX_BINARY="$RUNNER_TEMP/firefox/firefox" KITTY_GECKODRIVER="$RUNNER_TEMP/geckodriver" KITTY_TEST_MEDIA_TRACKS=hls KITTY_TEST_PILL_REPRODUCTION=1 python tests/test-hls-firefox.py
           cp artifacts/download-equivalence/firefox-report.json artifacts/pill-reproduction.json
           KITTY_FIREFOX_BINARY="$RUNNER_TEMP/firefox/firefox" KITTY_GECKODRIVER="$RUNNER_TEMP/geckodriver" KITTY_TEST_MEDIA_TRACKS=hls KITTY_TEST_DOWNLOAD_EQUIVALENCE=1 python tests/test-hls-firefox.py
@@ -42,6 +45,7 @@ jobs:
           failed=0
           python tests/check-public-metadata.py 'https://www.youtube.com/watch?v=BaW_jenozKc' --timeout 30 --report artifacts/public-youtube.json || failed=1
           python tests/check-public-metadata.py 'https://vimeo.com/76979871' --timeout 30 --report artifacts/public-vimeo.json || failed=1
+          KITTY_TEST_PUBLIC_TIKTOK=1 python tests/test-tiktok-native.py TikTokNativeTests.test_public_tiktok_with_expired_preloaded_cdn || failed=1
           exit "$failed"
       - uses: actions/upload-artifact@v7
         if: always()
@@ -72,6 +76,10 @@ jobs:
           node tests/test-pill-spa-context.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test-media-context-startup.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/test-tiktok-download.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test-tiktok-native.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/test-pill-download.js
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

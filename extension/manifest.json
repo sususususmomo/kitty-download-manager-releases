@@ -70,6 +70,7 @@
       ],
       "js": [
         "shared.js",
+        "media-resolver.js",
         "media-dom.js",
         "media-context.js"
       ],
